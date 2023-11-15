@@ -13,6 +13,7 @@ type Config struct {
 	Discord DiscordConfig `json:"discord"`
 	Twitter TwitterConfig `json:"twitter"`
 	SQLite  SQLiteConfig  `json:"sqlite"`
+	Notion  NotionConfig  `json:"notion"`
 }
 
 type DiscordConfig struct {
@@ -27,6 +28,13 @@ type TwitterConfig struct {
 
 type SQLiteConfig struct {
 	DSN string `json:"dsn"`
+}
+
+type NotionConfig struct {
+	Token           string `json:"token"`
+	PostDB          string `json:"post_db"`
+	SecondaryPostDB string `json:"secondary_post_db"`
+	AuthorDB        string `json:"author_db"`
 }
 
 func LoadConfig() (*Config, error) {

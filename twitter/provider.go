@@ -81,6 +81,7 @@ func (x *Provider) GetPost(id string) (*garoo.Post, error) {
 			Name:        u.Name,
 			Description: u.Biography,
 			Avator:      u.Avatar,
+			Provider:    provider,
 		},
 		Media: append(
 			lo.Map(t.Photos, photoToMedia),

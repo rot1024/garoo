@@ -5,6 +5,7 @@ go 1.21.3
 require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/joho/godotenv v1.5.1
+	github.com/jomei/notionapi v1.12.9
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/n0madic/twitter-scraper v0.0.0-20231104223941-296710769dd8

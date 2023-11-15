@@ -58,6 +58,7 @@ type Author struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Avator      string `json:"avator,omitempty"`
+	Provider    string `json:"provider"`
 }
 
 type MediaType string

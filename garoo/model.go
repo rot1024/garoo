@@ -9,7 +9,6 @@ type Message struct {
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
 	Content   string    `json:"content"`
-	Username  string    `json:"username"`
 }
 
 type Seed struct {

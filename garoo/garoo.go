@@ -42,6 +42,11 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 	msgs := formatMessage(msg.Content)
 	seeds := g.getSeeds(msgs)
 	le := len(seeds)
+	if le == 0 {
+		slog.Info("no seed found")
+		return
+	}
+
 	slog.Info("found seed(s)", "count", le)
 
 	var errors int
@@ -53,7 +58,7 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 			errmsg := fmt.Sprintf("ERROR (%d/%d): %v", i+1, le, err)
 
 			slog.Info("failed to process seed", "err", errmsg)
-			if err := rec.PostMessage(errmsg); err != nil {
+			if err := rec.PostMessage(errmsg, true); err != nil {
 				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 			}
 		} else {
@@ -63,7 +68,7 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 
 	slog.Info("done")
 	if errors == 0 {
-		if err := rec.PostMessage("DONE"); err != nil {
+		if err := rec.PostMessage("DONE!", false); err != nil {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 	}
@@ -127,7 +132,7 @@ func (g *Garoo) processSeed(seed Seed) error {
 
 		post.Category = seed.Category
 		post.Tags = seed.Tags
-		slog.Info("get post", "index", 1, "total", len(post.Media), "id", post.ID, "provider", post.Provider)
+		slog.Info("got post", "id", post.ID, "provider", post.Provider)
 
 		for _, store := range g.stores {
 			slog.Info("saving post", "store", store.Name())

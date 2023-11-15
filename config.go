@@ -18,7 +18,9 @@ type Config struct {
 }
 
 type DiscordConfig struct {
-	Token string `json:"token"`
+	Token   string `json:"token"`
+	Channel string `json:"channel"`
+	User    string `json:"user"`
 }
 
 type TwitterConfig struct {

@@ -1,8 +1,12 @@
 package garoo
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +15,13 @@ import (
 func TestGaroo(t *testing.T) {
 	var handler Handler
 	var messages []string
-	var logs []string
+
+	dlog := slog.Default()
+	l := &simpleLogger{buf: new(bytes.Buffer)}
+	slog.SetDefault(slog.New(l))
+	t.Cleanup(func() {
+		slog.SetDefault(dlog)
+	})
 
 	receiver := &MockReceiver{
 		NameFunc:  func() string { return "receiver" },
@@ -20,7 +30,7 @@ func TestGaroo(t *testing.T) {
 		AddHandlerFunc: func(h Handler) {
 			handler = h
 		},
-		PostMessageFunc: func(msg string) error {
+		PostMessageFunc: func(msg string, mentionToUser bool) error {
 			messages = append(messages, msg)
 			return nil
 		},
@@ -33,7 +43,8 @@ func TestGaroo(t *testing.T) {
 		},
 		GetPostFunc: func(id string) (*Post, error) {
 			return &Post{
-				ID: "postID",
+				ID:       "postID",
+				Provider: "provider",
 			}, nil
 		},
 	}
@@ -60,34 +71,34 @@ func TestGaroo(t *testing.T) {
 	}
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message from receiver: https://example.com",
-		"found 1 seed(s)",
-		"processing seed (1/1): postID (provider)",
-		"getting post from provider: postID",
-		"got post from provider: postID (0 media)",
-		"saving post to store",
-		"processed seed (1/1): postID (provider)",
+		"received message receiver=receiver msg=https://example.com",
+		"found seed(s) count=1",
+		"processing seed index=1 total=1 id=postID provider=provider",
+		"getting post provider=provider id=postID",
+		"got post id=postID provider=provider",
+		"saving post store=store",
+		"processed seed index=1 total=1 provider=provider",
 		"done",
-	}, logs)
+	}, l.Logs())
 	assert.Equal(t, []string{
-		"DONE",
+		"DONE!",
 	}, messages)
 
 	// test 2: fail to get post
 	provider.GetPostFunc = func(id string) (*Post, error) {
 		return nil, fmt.Errorf("failed to get post")
 	}
-	logs = nil
+	l.Reset()
 	messages = nil
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message from receiver: https://example.com",
-		"found 1 seed(s)",
-		"processing seed (1/1): postID (provider)",
-		"getting post from provider: postID",
-		"failed to process seed: ERROR (1/1): failed to get post from provider: failed to get post",
+		"received message receiver=receiver msg=https://example.com",
+		"found seed(s) count=1",
+		"processing seed index=1 total=1 id=postID provider=provider",
+		"getting post provider=provider id=postID",
+		"failed to process seed err=ERROR (1/1): failed to get post from provider: failed to get post",
 		"done",
-	}, logs)
+	}, l.Logs())
 	assert.Equal(t, []string{
 		"ERROR (1/1): failed to get post from provider: failed to get post",
 	}, messages)
@@ -98,23 +109,62 @@ func TestGaroo(t *testing.T) {
 	}
 	provider.GetPostFunc = func(id string) (*Post, error) {
 		return &Post{
-			ID: "postID",
+			ID:       "postID",
+			Provider: "provider",
 		}, nil
 	}
-	logs = nil
+	l.Reset()
 	messages = nil
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message from receiver: https://example.com",
-		"found 1 seed(s)",
-		"processing seed (1/1): postID (provider)",
-		"getting post from provider: postID",
-		"got post from provider: postID (0 media)",
-		"saving post to store",
-		"failed to process seed: ERROR (1/1): failed to save post to store: failed to save post",
+		"received message receiver=receiver msg=https://example.com",
+		"found seed(s) count=1",
+		"processing seed index=1 total=1 id=postID provider=provider",
+		"getting post provider=provider id=postID",
+		"got post id=postID provider=provider",
+		"saving post store=store",
+		"failed to process seed err=ERROR (1/1): failed to save post to store: failed to save post",
 		"done",
-	}, logs)
+	}, l.Logs())
 	assert.Equal(t, []string{
 		"ERROR (1/1): failed to save post to store: failed to save post",
 	}, messages)
+}
+
+type simpleLogger struct {
+	buf *bytes.Buffer
+}
+
+var _ slog.Handler = (*simpleLogger)(nil)
+
+func (l *simpleLogger) Enabled(ctx context.Context, level slog.Level) bool {
+	return true
+}
+
+func (l *simpleLogger) Handle(_ context.Context, r slog.Record) error {
+	fmt.Fprintf(l.buf, "%s", r.Message)
+
+	r.Attrs(func(a slog.Attr) bool {
+		fmt.Fprintf(l.buf, " %s=%v", a.Key, a.Value.Any())
+		return true
+	})
+
+	fmt.Fprintln(l.buf)
+	return nil
+}
+
+func (l *simpleLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return l
+}
+
+func (l *simpleLogger) WithGroup(name string) slog.Handler {
+	return l
+}
+
+func (l *simpleLogger) Logs() []string {
+	return strings.Split(strings.TrimSpace(l.buf.String()), "\n")
+}
+
+func (l *simpleLogger) Reset() {
+	l.buf.Reset()
 }

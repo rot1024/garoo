@@ -10,19 +10,29 @@ import (
 const receiver = "discord"
 
 type Receiver struct {
-	session *discordgo.Session
+	session   *discordgo.Session
+	channelID string
+	userID    string
+}
+
+type Config struct {
+	Token     string `json:"token"`
+	ChannelID string `json:"channelId"`
+	UserID    string `json:"userId"`
 }
 
 var _ garoo.Receiver = (*Receiver)(nil)
 
-func New(token string) (*Receiver, error) {
-	session, err := discordgo.New(token)
+func New(config Config) (*Receiver, error) {
+	session, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init discord: %v", err)
 	}
 
 	return &Receiver{
-		session: session,
+		session:   session,
+		channelID: config.ChannelID,
+		userID:    config.UserID,
 	}, nil
 }
 
@@ -32,7 +42,7 @@ func (d *Receiver) Name() string {
 
 func (d *Receiver) AddHandler(h garoo.Handler) {
 	d.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		if m.Author.ID == s.State.User.ID {
+		if m.Author.ID == s.State.User.ID || m.ChannelID != d.channelID {
 			return
 		}
 
@@ -40,13 +50,16 @@ func (d *Receiver) AddHandler(h garoo.Handler) {
 			ID:        m.ID,
 			Timestamp: m.Timestamp,
 			Content:   m.Content,
-			Username:  m.Author.Username,
 		}, d)
 	})
 }
 
-func (d *Receiver) PostMessage(msg string) error {
-	_, err := d.session.ChannelMessageSend(d.session.State.User.ID, msg)
+func (d *Receiver) PostMessage(msg string, mentionToUser bool) error {
+	if mentionToUser && d.userID != "" {
+		msg = fmt.Sprintf("<@%s> %s", d.userID, msg)
+	}
+
+	_, err := d.session.ChannelMessageSend(d.channelID, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %v", err)
 	}

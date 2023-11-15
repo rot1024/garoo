@@ -17,7 +17,7 @@ func initReceivers(conf *Config) (res []garoo.Receiver, _ error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to init receiver %s: %v", name, err)
 		}
-		if res == nil {
+		if receiver != nil {
 			res = append(res, receiver)
 		}
 	}
@@ -26,9 +26,13 @@ func initReceivers(conf *Config) (res []garoo.Receiver, _ error) {
 }
 
 func initDiscord(conf *Config) (garoo.Receiver, error) {
-	if conf.Discord.Token == "" {
-		return nil, fmt.Errorf("token is empty")
+	if conf.Discord.Token == "" || conf.Discord.Channel == "" {
+		return nil, fmt.Errorf("token or channel is empty")
 	}
 
-	return discord.New(conf.Discord.Token)
+	return discord.New(discord.Config{
+		Token:     conf.Discord.Token,
+		ChannelID: conf.Discord.Channel,
+		UserID:    conf.Discord.User,
+	})
 }

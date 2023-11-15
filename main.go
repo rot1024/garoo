@@ -19,6 +19,8 @@ func main() {
 }
 
 func main2() error {
+	slog.Info("garoo")
+
 	conf, err := LoadConfig()
 	if err != nil {
 		return err
@@ -66,6 +68,7 @@ func main2() error {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	<-sigCh
+	slog.Info("stopping garoo")
 	if err := g.Stop(); err != nil {
 		return fmt.Errorf("failed to stop garoo: %v", err)
 	}

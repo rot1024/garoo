@@ -17,7 +17,7 @@ func initProviders(conf *Config) (res []garoo.Provider, _ error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to init provider %s: %v", name, err)
 		}
-		if provider == nil {
+		if provider != nil {
 			res = append(res, provider)
 		}
 	}

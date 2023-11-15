@@ -37,34 +37,34 @@ func New(options Options) *Garoo {
 }
 
 func (g *Garoo) handler(msg *Message, rec Receiver) {
-	slog.Info("received message from %s: %s", rec.Name(), msg.Content)
+	slog.Info("received message", "receiver", rec.Name(), "msg", msg.Content)
 
 	msgs := formatMessage(msg.Content)
 	seeds := g.getSeeds(msgs)
 	le := len(seeds)
-	slog.Info("found %d seed(s)", le)
+	slog.Info("found seed(s)", "count", le)
 
 	var errors int
 	for i, seed := range seeds {
-		slog.Info("processing seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
+		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider)
 
 		if err := g.processSeed(seed); err != nil {
 			errors++
 			errmsg := fmt.Sprintf("ERROR (%d/%d): %v", i+1, le, err)
 
-			slog.Info("failed to process seed: %s", errmsg)
+			slog.Info("failed to process seed", "err", errmsg)
 			if err := rec.PostMessage(errmsg); err != nil {
-				slog.Info("failed to post message to %s: %v", rec.Name(), err)
+				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 			}
 		} else {
-			slog.Info("processed seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
+			slog.Info("processed seed", "index", i+1, "total", le, "provider", seed.Provider)
 		}
 	}
 
 	slog.Info("done")
 	if errors == 0 {
 		if err := rec.PostMessage("DONE"); err != nil {
-			slog.Info("failed to post message to %s: %v", rec.Name(), err)
+			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 	}
 }
@@ -118,7 +118,7 @@ func (g *Garoo) processSeed(seed Seed) error {
 			continue
 		}
 
-		slog.Info("getting post from %s: %s", provider.Name(), seed.ID)
+		slog.Info("getting post", "provider", seed.Provider, "id", seed.ID)
 
 		post, err := provider.GetPost(seed.ID)
 		if err != nil {
@@ -127,10 +127,10 @@ func (g *Garoo) processSeed(seed Seed) error {
 
 		post.Category = seed.Category
 		post.Tags = seed.Tags
-		slog.Info("got post from %s: %s (%d media)", provider.Name(), post.ID, len(post.Media))
+		slog.Info("get post", "index", 1, "total", len(post.Media), "id", post.ID, "provider", post.Provider)
 
 		for _, store := range g.stores {
-			slog.Info("saving post to %s", store.Name())
+			slog.Info("saving post", "store", store.Name())
 			if err := store.Save(post); err != nil {
 				return fmt.Errorf("failed to save post to %s: %v", store.Name(), err)
 			}

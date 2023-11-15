@@ -229,7 +229,7 @@ func (s *Store) createDir(p string) error {
 func (s *Store) moveFiles(p []string, dest string) error {
 	for _, f := range p {
 		to := path.Join(dest, path.Base(f))
-		slog.Info("dropbox: moving %s to %s", f, to)
+		slog.Info("dropbox: moving", "src", f, "dest", to)
 
 		_, err := s.client.MoveV2(&files.RelocationArg{
 			RelocationPath: files.RelocationPath{

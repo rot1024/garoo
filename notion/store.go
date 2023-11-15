@@ -49,7 +49,7 @@ func (s *Store) Save(post *garoo.Post) error {
 		return fmt.Errorf("failed to get author: %v", err)
 	}
 
-	slog.Info("notion: save author %s to %s", post.Author.ID, authorPageID)
+	slog.Info("notion: save author", "authorID", post.Author.ID, "pageID", authorPageID)
 	authorPageID2, err := s.saveAuthor(ctx, &post.Author, authorPageID)
 	if err != nil {
 		return fmt.Errorf("failed to save author: %v", err)

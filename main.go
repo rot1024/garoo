@@ -39,21 +39,17 @@ func main2() error {
 		return fmt.Errorf("failed to init providers: %v", err)
 	}
 
-	logger := func(format string, args ...interface{}) {
-		slog.Info(format, args...)
-	}
-
-	logger("receivers: %v", lo.Map(receivers, func(r garoo.Receiver, _ int) string {
+	slog.Info("receivers", "receivers", lo.Map(receivers, func(r garoo.Receiver, _ int) string {
 		return r.Name()
 	}))
-	logger("providers: %v", lo.Map(providers, func(p garoo.Provider, _ int) string {
+	slog.Info("providers", "providers", lo.Map(providers, func(p garoo.Provider, _ int) string {
 		return p.Name()
 	}))
-	logger("stores: %v", lo.Map(stores, func(s garoo.Store, _ int) string {
+	slog.Info("stores", "stores", lo.Map(stores, func(s garoo.Store, _ int) string {
 		return s.Name()
 	}))
 
-	logger("starting garoo")
+	slog.Info("starting garoo")
 
 	g := garoo.New(garoo.Options{
 		Receivers: receivers,
@@ -74,6 +70,6 @@ func main2() error {
 		return fmt.Errorf("failed to stop garoo: %v", err)
 	}
 
-	logger("stopped garoo")
+	slog.Info("stopped garoo")
 	return nil
 }

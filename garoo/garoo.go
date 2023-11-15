@@ -3,38 +3,30 @@ package garoo
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 
 	"github.com/samber/lo"
 )
 
-type Logger func(string, ...any)
-
 type Garoo struct {
 	receivers []Receiver
 	providers []Provider
 	stores    []Store
-	logger    Logger
 }
 
 type Options struct {
 	Receivers []Receiver
 	Providers []Provider
 	Stores    []Store
-	Logger    Logger
 }
 
 func New(options Options) *Garoo {
-	if options.Logger == nil {
-		options.Logger = func(string, ...any) {}
-	}
-
 	g := &Garoo{
 		receivers: options.Receivers,
 		providers: options.Providers,
 		stores:    options.Stores,
-		logger:    options.Logger,
 	}
 
 	for _, receiver := range g.receivers {
@@ -45,34 +37,34 @@ func New(options Options) *Garoo {
 }
 
 func (g *Garoo) handler(msg *Message, rec Receiver) {
-	g.logger("received message from %s: %s", rec.Name(), msg.Content)
+	slog.Info("received message from %s: %s", rec.Name(), msg.Content)
 
 	msgs := formatMessage(msg.Content)
 	seeds := g.getSeeds(msgs)
 	le := len(seeds)
-	g.logger("found %d seed(s)", le)
+	slog.Info("found %d seed(s)", le)
 
 	var errors int
 	for i, seed := range seeds {
-		g.logger("processing seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
+		slog.Info("processing seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
 
 		if err := g.processSeed(seed); err != nil {
 			errors++
 			errmsg := fmt.Sprintf("ERROR (%d/%d): %v", i+1, le, err)
 
-			g.logger("failed to process seed: %s", errmsg)
+			slog.Info("failed to process seed: %s", errmsg)
 			if err := rec.PostMessage(errmsg); err != nil {
-				g.logger("failed to post message to %s: %v", rec.Name(), err)
+				slog.Info("failed to post message to %s: %v", rec.Name(), err)
 			}
 		} else {
-			g.logger("processed seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
+			slog.Info("processed seed (%d/%d): %s (%s)", i+1, le, seed.ID, seed.Provider)
 		}
 	}
 
-	g.logger("done")
+	slog.Info("done")
 	if errors == 0 {
 		if err := rec.PostMessage("DONE"); err != nil {
-			g.logger("failed to post message to %s: %v", rec.Name(), err)
+			slog.Info("failed to post message to %s: %v", rec.Name(), err)
 		}
 	}
 }
@@ -126,7 +118,7 @@ func (g *Garoo) processSeed(seed Seed) error {
 			continue
 		}
 
-		g.logger("getting post from %s: %s", provider.Name(), seed.ID)
+		slog.Info("getting post from %s: %s", provider.Name(), seed.ID)
 
 		post, err := provider.GetPost(seed.ID)
 		if err != nil {
@@ -135,10 +127,10 @@ func (g *Garoo) processSeed(seed Seed) error {
 
 		post.Category = seed.Category
 		post.Tags = seed.Tags
-		g.logger("got post from %s: %s (%d media)", provider.Name(), post.ID, len(post.Media))
+		slog.Info("got post from %s: %s (%d media)", provider.Name(), post.ID, len(post.Media))
 
 		for _, store := range g.stores {
-			g.logger("saving post to %s", store.Name())
+			slog.Info("saving post to %s", store.Name())
 			if err := store.Save(post); err != nil {
 				return fmt.Errorf("failed to save post to %s: %v", store.Name(), err)
 			}

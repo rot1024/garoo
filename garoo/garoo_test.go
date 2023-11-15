@@ -45,15 +45,10 @@ func TestGaroo(t *testing.T) {
 		},
 	}
 
-	logger := func(msg string, args ...any) {
-		logs = append(logs, fmt.Sprintf(msg, args...))
-	}
-
 	g := New(Options{
 		Receivers: []Receiver{receiver},
 		Providers: []Provider{provider},
 		Stores:    []Store{store},
-		Logger:    logger,
 	})
 
 	assert.NoError(t, g.Start())

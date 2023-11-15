@@ -3,6 +3,7 @@ package notion
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/jomei/notionapi"
 	"github.com/rot1024/garoo/garoo"
@@ -16,7 +17,6 @@ type Store struct {
 	postDB   notionapi.DatabaseID
 	postDB2  notionapi.DatabaseID
 	authorDB notionapi.DatabaseID
-	logger   garoo.Logger
 }
 
 type Options struct {
@@ -24,24 +24,18 @@ type Options struct {
 	PostDB          string
 	SecondaryPostDB string
 	AuthorDB        string
-	Logger          garoo.Logger
 }
 
 var _ garoo.Store = (*Store)(nil)
 
 func New(options Options) *Store {
-	if options.Logger == nil {
-		options.Logger = func(_ string, _ ...interface{}) {}
-	}
 	return &Store{
 		client:   notionapi.NewClient(notionapi.Token(options.Token)),
 		postDB:   notionapi.DatabaseID(options.PostDB),
 		postDB2:  notionapi.DatabaseID(options.SecondaryPostDB),
 		authorDB: notionapi.DatabaseID(options.AuthorDB),
-		logger:   options.Logger,
 	}
 }
-
 func (s *Store) Name() string {
 	return "notion"
 }
@@ -49,19 +43,19 @@ func (s *Store) Name() string {
 func (s *Store) Save(post *garoo.Post) error {
 	ctx := context.Background()
 
-	s.logger("notion: get author %s", post.Author.ID)
+	slog.Info("notion: get author", "authorID", post.Author.ID)
 	authorPageID, err := s.getAuthor(ctx, &post.Author)
 	if err != nil {
 		return fmt.Errorf("failed to get author: %v", err)
 	}
 
-	s.logger("notion: save author %s to %s", post.Author.ID, authorPageID)
+	slog.Info("notion: save author %s to %s", post.Author.ID, authorPageID)
 	authorPageID2, err := s.saveAuthor(ctx, &post.Author, authorPageID)
 	if err != nil {
 		return fmt.Errorf("failed to save author: %v", err)
 	}
 
-	s.logger("notion: get post %s", post.ID)
+	slog.Info("notion: get post", "postID", post.ID)
 	postPageIDs, err := s.getPost(ctx, post)
 	if err != nil {
 		return fmt.Errorf("failed to get post: %v", err)
@@ -69,21 +63,21 @@ func (s *Store) Save(post *garoo.Post) error {
 
 	if len(postPageIDs) == 0 {
 		for i := range post.Media {
-			s.logger("notion: create post %s (%d/%d)", post.ID, i+1, len(post.Media))
+			slog.Info("notion: create post", "postID", post.ID, "index", i+1, "total", len(post.Media))
 			if err := s.savePost(ctx, post, i, nil, authorPageID2); err != nil {
 				return fmt.Errorf("failed to save post: %v", err)
 			}
 		}
 	} else {
 		for i, postPageID := range postPageIDs {
-			s.logger("notion: update post %s to %s (%d/%d)", post.ID, postPageID, i+1, len(postPageIDs))
+			slog.Info("notion: update post", "postID", post.ID, "pageID", postPageID, "index", i+1, "total", len(postPageIDs))
 			if err := s.savePost(ctx, post, i, &postPageID, authorPageID2); err != nil {
 				return fmt.Errorf("failed to save post: %v", err)
 			}
 		}
 	}
 
-	s.logger("notion: done")
+	slog.Info("notion: done")
 	return nil
 }
 

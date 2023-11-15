@@ -3,7 +3,7 @@ package dropbox
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -28,7 +28,7 @@ var _ garoo.Store = (*Store)(nil)
 func New(token, basedir string) *Store {
 	config := dropbox.Config{
 		Token:    token,
-		LogLevel: dropbox.LogInfo,
+		LogLevel: dropbox.LogOff,
 	}
 	client := files.New(config)
 
@@ -45,13 +45,13 @@ func (s *Store) Name() string {
 
 func (s *Store) Save(post *garoo.Post) error {
 	if len(post.Media) == 0 {
-		log.Printf("dropbox: no media in %s", post.ID)
+		slog.Info("dropbox: no media")
 		return nil
 	}
 
 	// look up the author dir
 	authorDir := s.dirpathWithAuthorName(post)
-	log.Printf("dropbox: looking up the author dir: %s", authorDir)
+	slog.Info("dropbox: looking up the author dir", "dir", authorDir)
 	exists, err := s.folderExists(authorDir)
 	if err != nil {
 		return fmt.Errorf("failed to check author dir: %w", err)
@@ -59,7 +59,7 @@ func (s *Store) Save(post *garoo.Post) error {
 
 	// if exists, save files
 	if exists {
-		log.Printf("dropbox: found the author dir")
+		slog.Info("dropbox: found the author dir")
 		if err := s.savePostTo(post, authorDir); err != nil {
 			return fmt.Errorf("failed to save post to author dir: %w", err)
 		}
@@ -68,7 +68,7 @@ func (s *Store) Save(post *garoo.Post) error {
 	}
 
 	// list files in the dir and extract files by screen name
-	log.Printf("dropbox: listing files in the root dir of %s", post.ID)
+	slog.Info("dropbox: listing files in the root dir")
 	rootDir := s.dirpath(post)
 	files, err := s.readdir(rootDir)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *Store) Save(post *garoo.Post) error {
 
 	// if extracted files are more than maxRootFileCountPerAuthor, create a new dir
 	if len(files)+len(post.Media) > maxRootFileCountPerAuthor {
-		log.Printf("dropbox: too many files in the root dir of %s", post.ID)
+		slog.Info("dropbox: too many files in the root dir")
 
 		// create a new dir
 		newDir := path.Join(rootDir, post.Author.ScreenName)
@@ -86,14 +86,14 @@ func (s *Store) Save(post *garoo.Post) error {
 			return fmt.Errorf("failed to create a new dir: %w", err)
 		}
 
-		log.Printf("dropbox: created a new dir: %s", newDir)
+		slog.Info("dropbox: created a new dir", "new dir", newDir)
 
 		// move files to the new dir
 		if err := s.moveFiles(files, newDir); err != nil {
 			return fmt.Errorf("failed to move files to the new dir: %w", err)
 		}
 
-		log.Printf("dropbox: moved %d files to the new dir: %s", len(files), newDir)
+		slog.Info("dropbox: moved files to the new dir", "file count", len(files), "new dir", newDir)
 
 		// save files to the new dir
 		if err := s.savePostTo(post, newDir); err != nil {
@@ -103,7 +103,7 @@ func (s *Store) Save(post *garoo.Post) error {
 		return nil
 	}
 
-	log.Printf("dropbox: saving files to the root dir: %s", rootDir)
+	slog.Info("dropbox: saving files to the root dir", "dir", rootDir)
 
 	// save files to the root dir
 	if err := s.savePostTo(post, rootDir); err != nil {
@@ -118,7 +118,7 @@ func (s *Store) savePostTo(p *garoo.Post, dir string) error {
 		filename := filename(p, i)
 		path := path.Join(dir, filename)
 
-		log.Printf("dropbox: saving %d/%d to %s", i+1, len(p.Media), path)
+		slog.Info("dropbox: saving", "index", i+1, "total", len(p.Media), "dest", path)
 
 		err := (func() error {
 			data, err := s.downloadMedia(p, i)
@@ -139,7 +139,7 @@ func (s *Store) savePostTo(p *garoo.Post, dir string) error {
 			return fmt.Errorf("failed to save %d/%d: %w", i+1, len(p.Media), err)
 		}
 
-		log.Printf("dropbox: saved %d/%d", i+1, len(p.Media))
+		slog.Info("dropbox: saved", "index", i+1, "total", len(p.Media), "dest", path)
 	}
 
 	return nil
@@ -229,7 +229,7 @@ func (s *Store) createDir(p string) error {
 func (s *Store) moveFiles(p []string, dest string) error {
 	for _, f := range p {
 		to := path.Join(dest, path.Base(f))
-		log.Printf("dropbox: moving %s to %s", f, to)
+		slog.Info("dropbox: moving %s to %s", f, to)
 
 		_, err := s.client.MoveV2(&files.RelocationArg{
 			RelocationPath: files.RelocationPath{

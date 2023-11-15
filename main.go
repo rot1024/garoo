@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -39,7 +40,7 @@ func main2() error {
 	}
 
 	logger := func(format string, args ...interface{}) {
-		log.Printf(format, args...)
+		slog.Info(format, args...)
 	}
 
 	logger("receivers: %v", lo.Map(receivers, func(r garoo.Receiver, _ int) string {
@@ -58,7 +59,6 @@ func main2() error {
 		Receivers: receivers,
 		Providers: providers,
 		Stores:    stores,
-		Logger:    logger,
 	})
 
 	if err := g.Start(); err != nil {

@@ -81,6 +81,7 @@ func TestGaroo(t *testing.T) {
 		"done",
 	}, l.Logs())
 	assert.Equal(t, []string{
+		"ACCEPTED 1 items",
 		"DONE!",
 	}, messages)
 
@@ -100,6 +101,7 @@ func TestGaroo(t *testing.T) {
 		"done",
 	}, l.Logs())
 	assert.Equal(t, []string{
+		"ACCEPTED 1 items",
 		"ERROR (1/1): failed to get post from provider: failed to get post",
 	}, messages)
 
@@ -127,6 +129,7 @@ func TestGaroo(t *testing.T) {
 		"done",
 	}, l.Logs())
 	assert.Equal(t, []string{
+		"ACCEPTED 1 items",
 		"ERROR (1/1): failed to save post to store: failed to save post",
 	}, messages)
 }

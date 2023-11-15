@@ -12,6 +12,7 @@ const CONFIG_PREFIX = "GAROO"
 type Config struct {
 	Discord DiscordConfig `json:"discord"`
 	Twitter TwitterConfig `json:"twitter"`
+	SQLite  SQLiteConfig  `json:"sqlite"`
 }
 
 type DiscordConfig struct {
@@ -22,6 +23,10 @@ type TwitterConfig struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+}
+
+type SQLiteConfig struct {
+	DSN string `json:"dsn"`
 }
 
 func LoadConfig() (*Config, error) {

@@ -6,6 +6,7 @@ require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/n0madic/twitter-scraper v0.0.0-20231104223941-296710769dd8
 	github.com/samber/lo v1.38.1
 	github.com/stretchr/testify v1.8.4

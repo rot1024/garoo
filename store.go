@@ -3,14 +3,16 @@ package main
 import (
 	"fmt"
 
+	"github.com/rot1024/garoo/dropbox"
 	"github.com/rot1024/garoo/garoo"
 	"github.com/rot1024/garoo/notion"
 	"github.com/rot1024/garoo/sqlite"
 )
 
 var stores = map[string]func(*Config) (garoo.Store, error){
-	"sqlite": initSQLite,
-	"notion": initNotion,
+	"sqlite":  initSQLite,
+	"notion":  initNotion,
+	"dropbox": initDropbox,
 }
 
 func initStores(conf *Config) (res []garoo.Store, _ error) {
@@ -44,4 +46,11 @@ func initNotion(conf *Config) (garoo.Store, error) {
 		SecondaryPostDB: conf.Notion.SecondaryPostDB,
 		AuthorDB:        conf.Notion.AuthorDB,
 	}), nil
+}
+
+func initDropbox(conf *Config) (garoo.Store, error) {
+	if conf.Dropbox.Token == "" || conf.Dropbox.BaseDir == "" {
+		return nil, nil
+	}
+	return dropbox.New(conf.Dropbox.Token, conf.Dropbox.BaseDir), nil
 }

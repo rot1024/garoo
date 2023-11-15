@@ -14,6 +14,7 @@ type Config struct {
 	Twitter TwitterConfig `json:"twitter"`
 	SQLite  SQLiteConfig  `json:"sqlite"`
 	Notion  NotionConfig  `json:"notion"`
+	Dropbox DropboxConfig `json:"dropbox"`
 }
 
 type DiscordConfig struct {
@@ -35,6 +36,11 @@ type NotionConfig struct {
 	PostDB          string `json:"post_db"`
 	SecondaryPostDB string `json:"secondary_post_db"`
 	AuthorDB        string `json:"author_db"`
+}
+
+type DropboxConfig struct {
+	Token   string `json:"token"`
+	BaseDir string `json:"base_dir"`
 }
 
 func LoadConfig() (*Config, error) {

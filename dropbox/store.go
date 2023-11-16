@@ -1,6 +1,7 @@
 package dropbox
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -67,9 +68,20 @@ func (s *Store) Save(post *garoo.Post) error {
 		return nil
 	}
 
+	// create the root dir if not exists
+	rootDir := s.dirpath(post)
+
+	if e, err := s.folderExists(rootDir); err != nil {
+		return fmt.Errorf("failed to check the root dir: %w", err)
+	} else if !e {
+		slog.Info("dropbox: creating the root dir", "dir", rootDir)
+		if err := s.createDir(rootDir); err != nil {
+			return fmt.Errorf("failed to create the root dir: %w", err)
+		}
+	}
+
 	// list files in the dir and extract files by screen name
 	slog.Info("dropbox: listing files in the root dir")
-	rootDir := s.dirpath(post)
 	files, err := s.readdir(rootDir)
 	if err != nil {
 		return fmt.Errorf("failed to list files in the root dir: %w", err)
@@ -161,6 +173,11 @@ func (s *Store) upload(path string, data io.Reader) error {
 	_, err := s.client.Upload(&files.UploadArg{
 		CommitInfo: files.CommitInfo{
 			Path: path,
+			Mode: &files.WriteMode{
+				Tagged: dropbox.Tagged{
+					Tag: files.WriteModeOverwrite,
+				},
+			},
 		},
 	}, data)
 
@@ -174,7 +191,15 @@ func (s *Store) folderExists(p string) (bool, error) {
 	res, err := s.client.GetMetadata(&files.GetMetadataArg{
 		Path: p,
 	})
+
 	if err != nil {
+		aerr := &files.GetMetadataAPIError{}
+		if errors.As(err, aerr) {
+			if aerr.EndpointError.Path.Tag == files.LookupErrorNotFound {
+				return false, nil
+			}
+		}
+
 		return false, err
 	}
 

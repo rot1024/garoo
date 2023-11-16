@@ -66,13 +66,16 @@ func TestStore(t *testing.T) {
 		"/foo/twitter/cat/author_bar4.jpg",
 		"/foo/twitter/cat/author_bar5.jpg",
 	}
+	c.createdFolders = nil
 	c.uploadedFiles = nil
 	c.uploadedFileData = nil
 	assert.NoError(t, d.Save(post))
 
 	assert.Equal(t, []string{"/foo/twitter/cat/author/author_bar.jpg"}, c.uploadedFiles)
 	assert.Equal(t, [][]byte{[]byte("foo")}, c.uploadedFileData)
-	assert.Equal(t, []string{"/foo/twitter/cat/author"}, c.createdFolders)
+	assert.Equal(t, []string{
+		"/foo/twitter/cat/author",
+	}, c.createdFolders)
 	assert.Equal(t, []string{
 		"/foo/twitter/cat/author/author_bar1.jpg",
 		"/foo/twitter/cat/author/author_bar2.jpg",

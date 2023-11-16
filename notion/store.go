@@ -42,17 +42,22 @@ func (s *Store) Name() string {
 
 func (s *Store) Save(post *garoo.Post) error {
 	ctx := context.Background()
+	var authorPageID *notionapi.PageID
 
-	slog.Info("notion: get author", "authorID", post.Author.ID)
-	authorPageID, err := s.getAuthor(ctx, &post.Author)
-	if err != nil {
-		return fmt.Errorf("failed to get author: %v", err)
-	}
+	if !isText(post) {
+		slog.Info("notion: get author", "authorID", post.Author.ID)
+		ap1, err := s.getAuthor(ctx, &post.Author)
+		if err != nil {
+			return fmt.Errorf("failed to get author: %v", err)
+		}
 
-	slog.Info("notion: save author", "authorID", post.Author.ID, "pageID", authorPageID)
-	authorPageID2, err := s.saveAuthor(ctx, &post.Author, authorPageID)
-	if err != nil {
-		return fmt.Errorf("failed to save author: %v", err)
+		slog.Info("notion: save author", "authorID", post.Author.ID, "pageID", ap1)
+		ap2, err := s.saveAuthor(ctx, &post.Author, ap1)
+		if err != nil {
+			return fmt.Errorf("failed to save author: %v", err)
+		}
+
+		authorPageID = &ap2
 	}
 
 	slog.Info("notion: get post", "postID", post.ID)
@@ -62,16 +67,23 @@ func (s *Store) Save(post *garoo.Post) error {
 	}
 
 	if len(postPageIDs) == 0 {
-		for i := range post.Media {
+		medias := post.Media
+		if len(medias) == 0 {
+			medias = append(medias, garoo.Media{
+				URL: post.URL, // dummy
+			})
+		}
+
+		for i := range medias {
 			slog.Info("notion: create post", "postID", post.ID, "index", i+1, "total", len(post.Media))
-			if err := s.savePost(ctx, post, i, nil, authorPageID2); err != nil {
+			if err := s.savePost(ctx, post, i, nil, authorPageID); err != nil {
 				return fmt.Errorf("failed to save post: %v", err)
 			}
 		}
 	} else {
 		for i, postPageID := range postPageIDs {
 			slog.Info("notion: update post", "postID", post.ID, "pageID", postPageID, "index", i+1, "total", len(postPageIDs))
-			if err := s.savePost(ctx, post, i, &postPageID, authorPageID2); err != nil {
+			if err := s.savePost(ctx, post, i, &postPageID, authorPageID); err != nil {
 				return fmt.Errorf("failed to save post: %v", err)
 			}
 		}
@@ -130,13 +142,13 @@ func (s *Store) getAuthor(ctx context.Context, a *garoo.Author) (*notionapi.Page
 	return lo.ToPtr(notionapi.PageID(q.Results[0].ID)), nil
 }
 
-func (s *Store) savePost(ctx context.Context, post *garoo.Post, i int, pageID *notionapi.PageID, authorPageID notionapi.PageID) (err error) {
-	db := s.postDBFor(post)
+func (s *Store) savePost(ctx context.Context, post *garoo.Post, i int, pageID, authorPageID *notionapi.PageID) (err error) {
 	properties := postProperties(post, i, authorPageID)
 
-	_, err = retry(retryCount, func() (_ any, err error) {
+	_, err = retry(retryCount, func() (_ any, err2 error) {
 		if pageID == nil {
-			_, err = s.client.Page.Create(ctx, &notionapi.PageCreateRequest{
+			db := s.postDBFor(post)
+			_, err2 = s.client.Page.Create(ctx, &notionapi.PageCreateRequest{
 				Parent: notionapi.Parent{
 					DatabaseID: db,
 				},
@@ -144,7 +156,7 @@ func (s *Store) savePost(ctx context.Context, post *garoo.Post, i int, pageID *n
 				Children:   blocks(post, i),
 			})
 		} else {
-			_, err = s.client.Page.Update(ctx, *pageID, &notionapi.PageUpdateRequest{
+			_, err2 = s.client.Page.Update(ctx, *pageID, &notionapi.PageUpdateRequest{
 				Properties: properties,
 			})
 		}
@@ -187,10 +199,10 @@ func (s *Store) getPost(ctx context.Context, post *garoo.Post) ([]notionapi.Page
 }
 
 func (s *Store) postDBFor(p *garoo.Post) notionapi.DatabaseID {
-	if p.Category == "_" || s.postDB2 == "" {
-		return s.postDB
+	if isText(p) && s.postDB2 != "" {
+		return s.postDB2
 	}
-	return s.postDB2
+	return s.postDB
 }
 
 func retry[T any](n int, f func() (T, error)) (res T, err error) {
@@ -201,4 +213,8 @@ func retry[T any](n int, f func() (T, error)) (res T, err error) {
 		}
 	}
 	return
+}
+
+func isText(post *garoo.Post) bool {
+	return len(post.Media) == 0 || post.Category == "_"
 }

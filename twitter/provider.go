@@ -85,8 +85,8 @@ func (x *Provider) GetPost(id string) (*garoo.Post, error) {
 		return nil, err
 	}
 
-	if t.QuotedStatus != nil {
-		t = t.QuotedStatus
+	if t.RetweetedStatus != nil {
+		t = t.RetweetedStatus
 	}
 
 	u, err := x.scraper.GetProfile(t.Username)

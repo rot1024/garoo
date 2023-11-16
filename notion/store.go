@@ -167,12 +167,12 @@ func (s *Store) getPost(ctx context.Context, post *garoo.Post) ([]notionapi.Page
 						Equals: post.ID,
 					},
 				},
-				Sorts: []notionapi.SortObject{
-					{
-						Property:  propertyPostIndex,
-						Direction: notionapi.SortOrderASC,
-					},
-				},
+				// Sorts: []notionapi.SortObject{
+				// 	{
+				// 		Property:  propertyPostIndex,
+				// 		Direction: notionapi.SortOrderASC,
+				// 	},
+				// },
 			},
 		)
 	})

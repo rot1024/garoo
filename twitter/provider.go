@@ -20,20 +20,27 @@ var hostnames = []string{
 }
 
 type Provider struct {
-	scraper *twitterscraper.Scraper
+	user     string
+	password string
+	email    string
+	scraper  *twitterscraper.Scraper
 }
 
 var _ garoo.Provider = (*Provider)(nil)
 
 func New(user, password, email string) (*Provider, error) {
 	scraper := twitterscraper.New()
-	err := scraper.Login(user, password, email)
+	// err := scraper.Login(user, password, email)
+	err := scraper.LoginOpenAccount()
 	if err != nil {
 		return nil, fmt.Errorf("failed to login: %v", err)
 	}
 
 	return &Provider{
-		scraper: scraper,
+		user:     user,
+		password: password,
+		email:    email,
+		scraper:  scraper,
 	}, nil
 }
 
@@ -88,6 +95,18 @@ func (x *Provider) GetPost(id string) (*garoo.Post, error) {
 			lo.Map(t.Videos, photoToVideo)...,
 		),
 	}, nil
+}
+
+func (x *Provider) GetConfig() (string, error) {
+	cookies := x.scraper.GetCookies()
+	s := marshalCookies(cookies)
+	return s, nil
+}
+
+func (x *Provider) SetConfig(c string) error {
+	cookies := unmarshalCookies(c)
+	x.scraper.SetCookies(cookies)
+	return nil
 }
 
 func photoToMedia(p twitterscraper.Photo, _ int) garoo.Media {

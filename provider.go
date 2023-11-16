@@ -26,9 +26,5 @@ func initProviders(conf *Config) (res []garoo.Provider, _ error) {
 }
 
 func initTwitter(conf *Config) (garoo.Provider, error) {
-	if conf.Twitter.User == "" {
-		return nil, fmt.Errorf("user is empty")
-	}
-
 	return twitter.New(conf.Twitter.User, conf.Twitter.Password, conf.Twitter.Email)
 }

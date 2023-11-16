@@ -3,6 +3,7 @@ package discord
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -140,7 +141,11 @@ func (d *Receiver) getConfigMessages() ([]*discordgo.Message, error) {
 	}
 
 	messages = lo.Filter(messages, func(m *discordgo.Message, _ int) bool {
-		return m.Author.ID == d.session.State.User.ID && strings.HasPrefix(m.Content, configPrefix)
+		return strings.HasPrefix(m.Content, configPrefix)
+	})
+
+	slices.SortFunc(messages, func(a, b *discordgo.Message) int {
+		return b.Timestamp.Compare(a.Timestamp)
 	})
 
 	return messages, nil

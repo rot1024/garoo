@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/samber/lo"
 )
@@ -24,6 +25,11 @@ type Options struct {
 	MainReceiver Receiver
 }
 
+type config struct {
+	Timestamp time.Time         `json:"timestamp"`
+	Providers map[string]string `json:"providers"`
+}
+
 func New(options Options) *Garoo {
 	g := &Garoo{
 		receivers:    options.Receivers,
@@ -34,6 +40,24 @@ func New(options Options) *Garoo {
 
 	for _, receiver := range g.receivers {
 		receiver.AddHandler(g.handler)
+	}
+
+	// load config
+	conf := &config{}
+	if err := g.mainReceiver.LoadConfig(conf); err != nil {
+		slog.Error("failed to load config", "err", err)
+	}
+
+	// init providers
+	for _, provider := range g.providers {
+		slog.Info("initializing provider", "provider", provider.Name())
+		if err := provider.Init(conf.Providers[provider.Name()]); err != nil {
+			slog.Error("failed to init provider", "provider", provider.Name(), "err", err)
+		}
+	}
+
+	if err := g.saveConfig(); err != nil {
+		slog.Error("failed to save config", "err", err)
 	}
 
 	return g
@@ -78,6 +102,28 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 	}
+
+	if err := g.saveConfig(); err != nil {
+		slog.Error("failed to save config", "err", err)
+	}
+}
+
+func (g *Garoo) saveConfig() error {
+	conf := &config{
+		Timestamp: time.Now(),
+		Providers: map[string]string{},
+	}
+
+	for _, provider := range g.providers {
+		conf.Providers[provider.Name()] = provider.GetConfig()
+	}
+
+	if err := g.mainReceiver.SaveConfig(conf); err != nil {
+		return fmt.Errorf("failed to save config: %v", err)
+	}
+
+	slog.Info("saved config")
+	return nil
 }
 
 func (g *Garoo) Start() (err error) {

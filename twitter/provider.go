@@ -2,6 +2,7 @@ package twitter
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strings"
@@ -30,18 +31,35 @@ var _ garoo.Provider = (*Provider)(nil)
 
 func New(user, password, email string) (*Provider, error) {
 	scraper := twitterscraper.New()
-	// err := scraper.Login(user, password, email)
-	err := scraper.LoginOpenAccount()
-	if err != nil {
-		return nil, fmt.Errorf("failed to login: %v", err)
-	}
-
 	return &Provider{
 		user:     user,
 		password: password,
 		email:    email,
 		scraper:  scraper,
 	}, nil
+}
+
+func (x *Provider) Init(conf string) (err error) {
+	if conf != "" {
+		x.setConfig(conf)
+		if x.scraper.IsLoggedIn() {
+			slog.Info("twitter: already logged in")
+			return nil
+		}
+	}
+
+	if x.user == "" || x.password == "" {
+		if err := x.scraper.LoginOpenAccount(); err != nil {
+			return fmt.Errorf("failed to login: %v", err)
+		}
+		slog.Info("twitter: logged in with open account")
+	} else if err = x.scraper.Login(x.user, x.password, x.email); err != nil {
+		return fmt.Errorf("failed to login: %v", err)
+	} else {
+		slog.Info("twitter: logged in")
+	}
+
+	return nil
 }
 
 func (x *Provider) Name() string {
@@ -97,16 +115,15 @@ func (x *Provider) GetPost(id string) (*garoo.Post, error) {
 	}, nil
 }
 
-func (x *Provider) GetConfig() (string, error) {
+func (x *Provider) GetConfig() string {
 	cookies := x.scraper.GetCookies()
 	s := marshalCookies(cookies)
-	return s, nil
+	return s
 }
 
-func (x *Provider) SetConfig(c string) error {
+func (x *Provider) setConfig(c string) {
 	cookies := unmarshalCookies(c)
 	x.scraper.SetCookies(cookies)
-	return nil
 }
 
 func photoToMedia(p twitterscraper.Photo, _ int) garoo.Media {

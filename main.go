@@ -54,8 +54,6 @@ func main2() error {
 		return s.Name()
 	}))
 
-	slog.Info("starting garoo")
-
 	g := garoo.New(garoo.Options{
 		Receivers:    receivers,
 		Providers:    providers,
@@ -66,6 +64,8 @@ func main2() error {
 	if err := g.Start(); err != nil {
 		return fmt.Errorf("failed to start garoo: %v", err)
 	}
+
+	slog.Info("ready")
 
 	// wait for sigkill
 	sigCh := make(chan os.Signal, 1)

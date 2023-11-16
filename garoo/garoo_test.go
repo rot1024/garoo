@@ -34,6 +34,8 @@ func TestGaroo(t *testing.T) {
 			messages = append(messages, msg)
 			return nil
 		},
+		SaveConfigFunc: func(config any) error { return nil },
+		LoadConfigFunc: func(config any) error { return nil },
 	}
 
 	provider := &MockProvider{
@@ -47,6 +49,8 @@ func TestGaroo(t *testing.T) {
 				Provider: "provider",
 			}, nil
 		},
+		InitFunc:      func(string) error { return nil },
+		GetConfigFunc: func() string { return "" },
 	}
 
 	store := &MockStore{
@@ -57,9 +61,10 @@ func TestGaroo(t *testing.T) {
 	}
 
 	g := New(Options{
-		Receivers: []Receiver{receiver},
-		Providers: []Provider{provider},
-		Stores:    []Store{store},
+		Receivers:    []Receiver{receiver},
+		Providers:    []Provider{provider},
+		Stores:       []Store{store},
+		MainReceiver: receiver,
 	})
 
 	assert.NoError(t, g.Start())
@@ -71,6 +76,8 @@ func TestGaroo(t *testing.T) {
 	}
 	handler(msg, receiver)
 	assert.Equal(t, []string{
+		"initializing provider provider=provider",
+		"saved config",
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
 		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
@@ -79,6 +86,7 @@ func TestGaroo(t *testing.T) {
 		"saving post store=store",
 		"processed seed index=1 total=1 provider=provider",
 		"done",
+		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
 		"ACCEPTED 1 items",
@@ -99,6 +107,7 @@ func TestGaroo(t *testing.T) {
 		"getting post provider=provider id=postID",
 		"failed to process seed err=ERROR (1/1): failed to get post from provider: failed to get post",
 		"done",
+		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
 		"ACCEPTED 1 items",
@@ -127,6 +136,7 @@ func TestGaroo(t *testing.T) {
 		"saving post store=store",
 		"failed to process seed err=ERROR (1/1): failed to save post to store: failed to save post",
 		"done",
+		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
 		"ACCEPTED 1 items",

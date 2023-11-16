@@ -33,4 +33,11 @@ func TestSeedFrom(t *testing.T) {
 		Provider: "twitter",
 		Tags:     []string{"tag1", "tag2"},
 	}, seed4)
+
+	seed5 := SeedFrom("1234567890", "twitter", "hoge cat")
+	assert.Equal(t, Seed{
+		ID:       "1234567890",
+		Provider: "twitter",
+		Category: "cat",
+	}, seed5)
 }

@@ -64,6 +64,9 @@ func (d *Receiver) PostMessage(msg string, mentionToUser bool) error {
 		msg = fmt.Sprintf("<@%s> %s", d.userID, msg)
 	}
 
+	// Must be 2000 or fewer in length
+	msg = msg[:min(len(msg), 2000)]
+
 	_, err := d.session.ChannelMessageSend(d.channelID, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %v", err)

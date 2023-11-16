@@ -23,12 +23,14 @@ func SeedFrom(postID, provider, message string) Seed {
 	var cat string
 	var tags []string
 
-	if len(msgs) > 2 {
+	if len(msgs) > 1 {
 		cat = msgs[1]
 		if cat == "-" {
 			cat = ""
 		}
-		tags = msgs[2:]
+		if len(msgs) > 2 {
+			tags = msgs[2:]
+		}
 	}
 
 	return Seed{

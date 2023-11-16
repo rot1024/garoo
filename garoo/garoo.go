@@ -26,8 +26,9 @@ type Options struct {
 }
 
 type config struct {
-	Timestamp time.Time         `json:"timestamp"`
-	Providers map[string]string `json:"providers"`
+	Timestamp time.Time         `json:"timestamp,omitempty"`
+	Providers map[string]string `json:"providers,omitempty"`
+	Stores    map[string]string `json:"stores,omitempty"`
 }
 
 func New(options Options) *Garoo {
@@ -56,6 +57,14 @@ func New(options Options) *Garoo {
 		}
 	}
 
+	// init stores
+	for _, store := range g.stores {
+		slog.Info("initializing store", "store", store.Name())
+		if err := store.Init(conf.Stores[store.Name()]); err != nil {
+			slog.Error("failed to init store", "store", store.Name(), "err", err)
+		}
+	}
+
 	if err := g.SaveConfig(); err != nil {
 		slog.Error("failed to save config", "err", err)
 	}
@@ -65,6 +74,19 @@ func New(options Options) *Garoo {
 
 func (g *Garoo) handler(msg *Message, rec Receiver) {
 	slog.Info("received message", "receiver", rec.Name(), "msg", msg.Content)
+
+	if strings.HasPrefix(msg.Content, "garo ") {
+		args := strings.Split(msg.Content, " ")
+
+		if err := g.processCommand(args[1:], rec); err != nil {
+			slog.Error("failed to process command", "args", args[1:], "err", err)
+
+			if err := rec.PostMessage(fmt.Sprintf("ERROR: %v", err), true); err != nil {
+				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
+			}
+		}
+		return
+	}
 
 	msgs := formatMessage(msg.Content)
 	seeds := g.getSeeds(msgs)
@@ -112,10 +134,19 @@ func (g *Garoo) SaveConfig() error {
 	conf := &config{
 		Timestamp: time.Now(),
 		Providers: map[string]string{},
+		Stores:    map[string]string{},
 	}
 
 	for _, provider := range g.providers {
-		conf.Providers[provider.Name()] = provider.GetConfig()
+		if c := provider.GetConfig(); c != "" {
+			conf.Providers[provider.Name()] = c
+		}
+	}
+
+	for _, store := range g.stores {
+		if c := store.GetConfig(); c != "" {
+			conf.Stores[store.Name()] = c
+		}
 	}
 
 	if err := g.mainReceiver.SaveConfig(conf); err != nil {
@@ -194,6 +225,15 @@ func (g *Garoo) processSeed(seed Seed) error {
 		}
 	}
 
+	return nil
+}
+
+func (g *Garoo) findStore(name string) Store {
+	for _, store := range g.stores {
+		if store.Name() == name {
+			return store
+		}
+	}
 	return nil
 }
 

@@ -41,8 +41,10 @@ type NotionConfig struct {
 }
 
 type DropboxConfig struct {
-	Token   string `json:"token"`
-	BaseDir string `json:"base_dir"`
+	Token         string `json:"token"`
+	BaseDir       string `json:"base_dir"`
+	Client_ID     string `json:"client_id"`
+	Client_Secret string `json:"client_secret"`
 }
 
 func LoadConfig() (*Config, error) {

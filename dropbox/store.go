@@ -13,30 +13,44 @@ import (
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"github.com/rot1024/garoo/garoo"
 	"github.com/samber/lo"
+	"golang.org/x/oauth2"
 )
 
 const maxRootFileCountPerAuthor = 5
 const defaultCategory = "uncategorized"
 
 type Store struct {
-	client  files.Client
-	http    *http.Client
-	basedir string
+	client      files.Client
+	http        *http.Client
+	basedir     string
+	tokenSource oauth2.TokenSource
+	oauth2Conf  *oauth2.Config
+	test        bool
+}
+
+type Config struct {
+	Token        string `json:"token"`
+	BaseDir      string `json:"base_dir"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
 }
 
 var _ garoo.Store = (*Store)(nil)
 
-func New(token, basedir string) *Store {
-	config := dropbox.Config{
-		Token:    token,
-		LogLevel: dropbox.LogOff,
+func New(conf Config) *Store {
+	var tokenSource oauth2.TokenSource
+	if conf.Token != "" {
+		token := &oauth2.Token{
+			AccessToken: conf.Token,
+		}
+		tokenSource = oauth2.StaticTokenSource(token)
 	}
-	client := files.New(config)
 
 	return &Store{
-		client:  client,
-		http:    http.DefaultClient,
-		basedir: basedir,
+		tokenSource: tokenSource,
+		http:        http.DefaultClient,
+		basedir:     conf.BaseDir,
+		oauth2Conf:  oauth2Config(conf),
 	}
 }
 
@@ -48,6 +62,11 @@ func (s *Store) Save(post *garoo.Post) error {
 	if len(post.Media) == 0 {
 		slog.Info("dropbox: no media")
 		return nil
+	}
+
+	// update token
+	if err := s.updateToken(); err != nil {
+		return fmt.Errorf("failed to update token: %w", err)
 	}
 
 	// look up the author dir

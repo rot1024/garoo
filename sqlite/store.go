@@ -40,6 +40,14 @@ func (s *Store) Save(post *garoo.Post) error {
 	})
 }
 
+func (s *Store) RequestLogin() (string, error) {
+	return "", nil
+}
+
+func (s *Store) Login(token string) error {
+	return nil
+}
+
 func (s *Store) upsertPost(db *sql.DB, post *garoo.Post) error {
 	_, err := db.Exec(
 		"REPLACE INTO pictures (id, user_name, user_screenname, user_id, description, provider, url, created_at, category, label, count, media_url, user_avatar_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
@@ -83,4 +91,12 @@ func (s *Store) open(f func(db *sql.DB) error) error {
 
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
+}
+
+func (s *Store) GetConfig() string {
+	return ""
+}
+
+func (s *Store) Init(c string) error {
+	return nil
 }

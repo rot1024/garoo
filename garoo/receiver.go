@@ -1,5 +1,7 @@
 package garoo
 
+import "log/slog"
+
 type Handler func(*Message, Receiver)
 
 type Receiver interface {
@@ -50,4 +52,10 @@ func (r *MockReceiver) SaveConfig(config any) error {
 
 func (r *MockReceiver) LoadConfig(config any) error {
 	return r.LoadConfigFunc(config)
+}
+
+func postMessage(rec Receiver, content string) {
+	if err := rec.PostMessage("unknown command", false); err != nil {
+		slog.Error("failed to post message", "err", err)
+	}
 }

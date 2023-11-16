@@ -49,8 +49,13 @@ func initNotion(conf *Config) (garoo.Store, error) {
 }
 
 func initDropbox(conf *Config) (garoo.Store, error) {
-	if conf.Dropbox.Token == "" || conf.Dropbox.BaseDir == "" {
+	if conf.Dropbox.BaseDir == "" {
 		return nil, nil
 	}
-	return dropbox.New(conf.Dropbox.Token, conf.Dropbox.BaseDir), nil
+	return dropbox.New(dropbox.Config{
+		Token:        conf.Dropbox.Token,
+		BaseDir:      conf.Dropbox.BaseDir,
+		ClientID:     conf.Dropbox.Client_ID,
+		ClientSecret: conf.Dropbox.Client_Secret,
+	}), nil
 }

@@ -93,6 +93,14 @@ func (s *Store) Save(post *garoo.Post) error {
 	return nil
 }
 
+func (s *Store) RequestLogin() (string, error) {
+	return "", nil
+}
+
+func (s *Store) Login(token string) error {
+	return nil
+}
+
 func (s *Store) saveAuthor(ctx context.Context, author *garoo.Author, pageID *notionapi.PageID) (_ notionapi.PageID, err error) {
 	properties := authorProperties(author)
 
@@ -217,4 +225,12 @@ func retry[T any](n int, f func() (T, error)) (res T, err error) {
 
 func isText(post *garoo.Post) bool {
 	return len(post.Media) == 0 || post.Category == "_"
+}
+
+func (s *Store) GetConfig() string {
+	return ""
+}
+
+func (s *Store) Init(c string) error {
+	return nil
 }

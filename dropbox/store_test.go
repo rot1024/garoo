@@ -13,6 +13,7 @@ import (
 	"github.com/rot1024/garoo/garoo"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 )
 
 func TestStore(t *testing.T) {
@@ -27,6 +28,10 @@ func TestStore(t *testing.T) {
 		client:  c,
 		http:    http.DefaultClient,
 		basedir: "/foo",
+		tokenSource: oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken: "token",
+		}),
+		test: true,
 	}
 	post := &garoo.Post{
 		ID:       "bar",
@@ -41,6 +46,8 @@ func TestStore(t *testing.T) {
 		},
 		Category: "cat",
 	}
+
+	assert.NoError(t, d.Init(""))
 
 	// test1: author dir exists
 	c.files = []string{"/foo/twitter/cat/author/author_bar.jpg"}

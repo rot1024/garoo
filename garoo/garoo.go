@@ -11,22 +11,25 @@ import (
 )
 
 type Garoo struct {
-	receivers []Receiver
-	providers []Provider
-	stores    []Store
+	receivers    []Receiver
+	providers    []Provider
+	stores       []Store
+	mainReceiver Receiver
 }
 
 type Options struct {
-	Receivers []Receiver
-	Providers []Provider
-	Stores    []Store
+	Receivers    []Receiver
+	Providers    []Provider
+	Stores       []Store
+	MainReceiver Receiver
 }
 
 func New(options Options) *Garoo {
 	g := &Garoo{
-		receivers: options.Receivers,
-		providers: options.Providers,
-		stores:    options.Stores,
+		receivers:    options.Receivers,
+		providers:    options.Providers,
+		stores:       options.Stores,
+		mainReceiver: options.MainReceiver,
 	}
 
 	for _, receiver := range g.receivers {
@@ -54,7 +57,7 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 
 	var errors int
 	for i, seed := range seeds {
-		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider)
+		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
 
 		if err := g.processSeed(seed); err != nil {
 			errors++

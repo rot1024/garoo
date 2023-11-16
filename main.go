@@ -30,6 +30,9 @@ func main2() error {
 	if err != nil {
 		return fmt.Errorf("failed to init receivers: %v", err)
 	}
+	if len(receivers) == 0 {
+		return fmt.Errorf("no receivers found")
+	}
 
 	stores, err := initStores(conf)
 	if err != nil {
@@ -54,9 +57,10 @@ func main2() error {
 	slog.Info("starting garoo")
 
 	g := garoo.New(garoo.Options{
-		Receivers: receivers,
-		Providers: providers,
-		Stores:    stores,
+		Receivers:    receivers,
+		Providers:    providers,
+		Stores:       stores,
+		MainReceiver: receivers[0],
 	})
 
 	if err := g.Start(); err != nil {

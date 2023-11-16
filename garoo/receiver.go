@@ -8,6 +8,8 @@ type Receiver interface {
 	PostMessage(string, bool) error
 	Start() error
 	Stop() error
+	SaveConfig(any) error
+	LoadConfig(any) error
 }
 
 type MockReceiver struct {
@@ -16,6 +18,8 @@ type MockReceiver struct {
 	PostMessageFunc func(string, bool) error
 	StartFunc       func() error
 	StopFunc        func() error
+	SaveConfigFunc  func(any) error
+	LoadConfigFunc  func(any) error
 }
 
 var _ Receiver = (*MockReceiver)(nil)
@@ -38,4 +42,12 @@ func (r *MockReceiver) Start() error {
 
 func (r *MockReceiver) Stop() error {
 	return r.StopFunc()
+}
+
+func (r *MockReceiver) SaveConfig(config any) error {
+	return r.SaveConfigFunc(config)
+}
+
+func (r *MockReceiver) LoadConfig(config any) error {
+	return r.LoadConfigFunc(config)
 }

@@ -67,13 +67,13 @@ func TestGaroo(t *testing.T) {
 
 	// test 1: success
 	msg := &Message{
-		Content: "https://example.com",
+		Content: "https://example.com aaa bbb",
 	}
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message receiver=receiver msg=https://example.com",
+		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider",
+		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
 		"getting post provider=provider id=postID",
 		"got post id=postID provider=provider",
 		"saving post store=store",
@@ -93,9 +93,9 @@ func TestGaroo(t *testing.T) {
 	messages = nil
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message receiver=receiver msg=https://example.com",
+		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider",
+		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
 		"getting post provider=provider id=postID",
 		"failed to process seed err=ERROR (1/1): failed to get post from provider: failed to get post",
 		"done",
@@ -119,9 +119,9 @@ func TestGaroo(t *testing.T) {
 	messages = nil
 	handler(msg, receiver)
 	assert.Equal(t, []string{
-		"received message receiver=receiver msg=https://example.com",
+		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider",
+		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
 		"getting post provider=provider id=postID",
 		"got post id=postID provider=provider",
 		"saving post store=store",

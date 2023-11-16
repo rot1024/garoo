@@ -1,13 +1,17 @@
 package discord
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/rot1024/garoo/garoo"
+	"github.com/samber/lo"
 )
 
 const receiver = "discord"
+const configPrefix = "CONFIG: "
 
 type Receiver struct {
 	session   *discordgo.Session
@@ -78,4 +82,66 @@ func (d *Receiver) Stop() error {
 		return fmt.Errorf("failed to close session: %v", err)
 	}
 	return nil
+}
+
+func (d *Receiver) SaveConfig(config any) error {
+	confj, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+
+	content := configPrefix + string(confj)
+	messages, err := d.getConfigMessages()
+	if err != nil {
+		return fmt.Errorf("failed to get config messages: %v", err)
+	}
+
+	msg, err := d.session.ChannelMessageSend(d.channelID, content)
+	if err != nil {
+		return fmt.Errorf("failed to send message: %v", err)
+	}
+
+	if err := d.session.ChannelMessagePin(d.channelID, msg.ID); err != nil {
+		return fmt.Errorf("failed to pin message: %v", err)
+	}
+
+	// remove old config messages
+	for _, m := range messages {
+		if err := d.session.ChannelMessageDelete(d.channelID, m.ID); err != nil {
+			return fmt.Errorf("failed to delete message: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (d *Receiver) LoadConfig(config any) error {
+	messages, err := d.getConfigMessages()
+	if err != nil {
+		return fmt.Errorf("failed to get config messages: %v", err)
+	}
+
+	if len(messages) == 0 {
+		return nil
+	}
+
+	configj := strings.TrimPrefix(messages[0].Content, configPrefix)
+	if err := json.Unmarshal([]byte(configj), config); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %v", err)
+	}
+
+	return nil
+}
+
+func (d *Receiver) getConfigMessages() ([]*discordgo.Message, error) {
+	messages, err := d.session.ChannelMessagesPinned(d.channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pinned messages: %v", err)
+	}
+
+	messages = lo.Filter(messages, func(m *discordgo.Message, _ int) bool {
+		return m.Author.ID == d.session.State.User.ID && strings.HasPrefix(m.Content, configPrefix)
+	})
+
+	return messages, nil
 }

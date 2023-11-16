@@ -92,24 +92,23 @@ func (d *Receiver) SaveConfig(config any) error {
 	}
 
 	content := configPrefix + string(confj)
-	messages, err := d.getConfigMessages()
+	message, err := d.getConfigMessages()
 	if err != nil {
 		return fmt.Errorf("failed to get config messages: %v", err)
 	}
 
-	msg, err := d.session.ChannelMessageSend(d.channelID, content)
-	if err != nil {
-		return fmt.Errorf("failed to send message: %v", err)
-	}
+	if message == nil {
+		msg, err := d.session.ChannelMessageSend(d.channelID, content)
+		if err != nil {
+			return fmt.Errorf("failed to send message: %v", err)
+		}
 
-	if err := d.session.ChannelMessagePin(d.channelID, msg.ID); err != nil {
-		return fmt.Errorf("failed to pin message: %v", err)
-	}
-
-	// remove old config messages
-	for _, m := range messages {
-		if err := d.session.ChannelMessageDelete(d.channelID, m.ID); err != nil {
-			return fmt.Errorf("failed to delete message: %v", err)
+		if err := d.session.ChannelMessagePin(d.channelID, msg.ID); err != nil {
+			return fmt.Errorf("failed to pin message: %v", err)
+		}
+	} else {
+		if _, err := d.session.ChannelMessageEdit(d.channelID, message.ID, content); err != nil {
+			return fmt.Errorf("failed to edit message: %v", err)
 		}
 	}
 
@@ -117,16 +116,12 @@ func (d *Receiver) SaveConfig(config any) error {
 }
 
 func (d *Receiver) LoadConfig(config any) error {
-	messages, err := d.getConfigMessages()
+	message, err := d.getConfigMessages()
 	if err != nil {
 		return fmt.Errorf("failed to get config messages: %v", err)
 	}
 
-	if len(messages) == 0 {
-		return nil
-	}
-
-	configj := strings.TrimPrefix(messages[0].Content, configPrefix)
+	configj := strings.TrimPrefix(message.Content, configPrefix)
 	if err := json.Unmarshal([]byte(configj), config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %v", err)
 	}
@@ -134,7 +129,7 @@ func (d *Receiver) LoadConfig(config any) error {
 	return nil
 }
 
-func (d *Receiver) getConfigMessages() ([]*discordgo.Message, error) {
+func (d *Receiver) getConfigMessages() (*discordgo.Message, error) {
 	messages, err := d.session.ChannelMessagesPinned(d.channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pinned messages: %v", err)
@@ -144,9 +139,13 @@ func (d *Receiver) getConfigMessages() ([]*discordgo.Message, error) {
 		return strings.HasPrefix(m.Content, configPrefix)
 	})
 
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
 	slices.SortFunc(messages, func(a, b *discordgo.Message) int {
 		return b.Timestamp.Compare(a.Timestamp)
 	})
 
-	return messages, nil
+	return messages[0], nil
 }

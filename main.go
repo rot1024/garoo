@@ -73,6 +73,11 @@ func main2() error {
 
 	<-sigCh
 	slog.Info("stopping garoo")
+
+	if err := g.SaveConfig(); err != nil {
+		return fmt.Errorf("failed to save config: %v", err)
+	}
+
 	if err := g.Stop(); err != nil {
 		return fmt.Errorf("failed to stop garoo: %v", err)
 	}

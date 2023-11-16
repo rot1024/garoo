@@ -56,7 +56,7 @@ func New(options Options) *Garoo {
 		}
 	}
 
-	if err := g.saveConfig(); err != nil {
+	if err := g.SaveConfig(); err != nil {
 		slog.Error("failed to save config", "err", err)
 	}
 
@@ -103,12 +103,12 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 		}
 	}
 
-	if err := g.saveConfig(); err != nil {
+	if err := g.SaveConfig(); err != nil {
 		slog.Error("failed to save config", "err", err)
 	}
 }
 
-func (g *Garoo) saveConfig() error {
+func (g *Garoo) SaveConfig() error {
 	conf := &config{
 		Timestamp: time.Now(),
 		Providers: map[string]string{},

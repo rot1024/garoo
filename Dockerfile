@@ -15,7 +15,7 @@ FROM alpine
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /app/garoo-app /app/garoo
 
-RUN chomod a+rw /app
+RUN chmod a+rw /app
 
 WORKDIR /app
 

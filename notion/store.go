@@ -93,12 +93,8 @@ func (s *Store) Save(post *garoo.Post) error {
 	return nil
 }
 
-func (s *Store) RequestLogin() (string, error) {
+func (s *Store) Login(code string) (string, error) {
 	return "", nil
-}
-
-func (s *Store) Login(token string) error {
-	return nil
 }
 
 func (s *Store) saveAuthor(ctx context.Context, author *garoo.Author, pageID *notionapi.PageID) (_ notionapi.PageID, err error) {

@@ -40,12 +40,8 @@ func (s *Store) Save(post *garoo.Post) error {
 	})
 }
 
-func (s *Store) RequestLogin() (string, error) {
+func (s *Store) Login(code string) (string, error) {
 	return "", nil
-}
-
-func (s *Store) Login(token string) error {
-	return nil
 }
 
 func (s *Store) upsertPost(db *sql.DB, post *garoo.Post) error {

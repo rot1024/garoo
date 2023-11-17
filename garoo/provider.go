@@ -4,8 +4,7 @@ import "net/url"
 
 type Provider interface {
 	Init(string) error
-	RequestLogin() (string, error)
-	Login(string) error
+	Login(string) (string, error)
 	Name() string
 	ExtractPostID(*url.URL) string
 	GetPost(id string) (*Post, error)
@@ -15,8 +14,7 @@ type Provider interface {
 type MockProvider struct {
 	NameFunc          func() string
 	InitFunc          func(string) error
-	RequestLoginFunc  func() (string, error)
-	LoginFunc         func(string) error
+	LoginFunc         func(string) (string, error)
 	ExtractPostIDFunc func(*url.URL) string
 	GetPostFunc       func(string) (*Post, error)
 	GetConfigFunc     func() string
@@ -32,11 +30,7 @@ func (p *MockProvider) Init(conf string) error {
 	return p.InitFunc(conf)
 }
 
-func (p *MockProvider) RequestLogin() (string, error) {
-	return p.RequestLoginFunc()
-}
-
-func (p *MockProvider) Login(code string) error {
+func (p *MockProvider) Login(code string) (string, error) {
 	return p.LoginFunc(code)
 }
 

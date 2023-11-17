@@ -24,17 +24,17 @@ func (s *Store) Init(conf string) error {
 	return errors.New("no token")
 }
 
-func (s *Store) RequestLogin() (string, error) {
-	return s.oauth2Conf.AuthCodeURL("state", oauth2.AccessTypeOffline), nil
-}
-
-func (s *Store) Login(code string) error {
-	token, err := s.oauth2Conf.Exchange(context.Background(), code)
-	if err != nil {
-		return err
+func (s *Store) Login(code string) (string, error) {
+	if code == "" {
+		return s.oauth2Conf.AuthCodeURL("state", oauth2.AccessTypeOffline), nil
 	}
 
-	return s.login(token)
+	token, err := s.oauth2Conf.Exchange(context.Background(), code)
+	if err != nil {
+		return "", err
+	}
+
+	return "", s.login(token)
 }
 
 func (s *Store) login(tok *oauth2.Token) error {

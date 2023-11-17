@@ -1,7 +1,6 @@
 package twitter
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -53,25 +52,22 @@ func (x *Provider) Init(conf string) (err error) {
 		}
 	}
 
-	return x.Login("")
+	_, err = x.Login("")
+	return err
 }
 
-func (x *Provider) RequestLogin() (string, error) {
-	return "", errors.New("not implemented")
-}
-
-func (x *Provider) Login(code string) (err error) {
+func (x *Provider) Login(code string) (string, error) {
 	if x.user == "" || x.password == "" {
 		if err := x.scraper.LoginOpenAccount(); err != nil {
-			return fmt.Errorf("failed to login: %v", err)
+			return "", fmt.Errorf("failed to login: %v", err)
 		}
 		slog.Info("twitter: logged in with open account")
-	} else if err = x.scraper.Login(x.user, x.password, x.email); err != nil {
-		return fmt.Errorf("failed to login: %v", err)
+	} else if err := x.scraper.Login(x.user, x.password, x.email); err != nil {
+		return "", fmt.Errorf("failed to login: %v", err)
 	} else {
 		slog.Info("twitter: logged in")
 	}
-	return
+	return "", nil
 }
 
 func (*Provider) ExtractPostID(u *url.URL) string {

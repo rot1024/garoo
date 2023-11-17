@@ -54,11 +54,10 @@ func TestGaroo(t *testing.T) {
 	}
 
 	store := &MockStore{
-		NameFunc:         func() string { return "store" },
-		InitFunc:         func(string) error { return nil },
-		RequestLoginFunc: func() (string, error) { return "", nil },
-		LoginFunc:        func(string) error { return nil },
-		GetConfigFunc:    func() string { return "" },
+		NameFunc:      func() string { return "store" },
+		InitFunc:      func(string) error { return nil },
+		LoginFunc:     func(string) (string, error) { return "", nil },
+		GetConfigFunc: func() string { return "" },
 		SaveFunc: func(p *Post) error {
 			return nil
 		},

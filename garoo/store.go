@@ -4,18 +4,16 @@ type Store interface {
 	Name() string
 	Init(string) error
 	Save(*Post) error
-	RequestLogin() (string, error)
-	Login(token string) error
+	Login(string) (string, error)
 	GetConfig() string
 }
 
 type MockStore struct {
-	NameFunc         func() string
-	InitFunc         func(string) error
-	SaveFunc         func(*Post) error
-	RequestLoginFunc func() (string, error)
-	LoginFunc        func(string) error
-	GetConfigFunc    func() string
+	NameFunc      func() string
+	InitFunc      func(string) error
+	SaveFunc      func(*Post) error
+	LoginFunc     func(string) (string, error)
+	GetConfigFunc func() string
 }
 
 var _ Store = (*MockStore)(nil)
@@ -32,12 +30,8 @@ func (s *MockStore) Save(p *Post) error {
 	return s.SaveFunc(p)
 }
 
-func (s *MockStore) RequestLogin() (string, error) {
-	return s.RequestLoginFunc()
-}
-
-func (s *MockStore) Login(token string) error {
-	return s.LoginFunc(token)
+func (s *MockStore) Login(code string) (string, error) {
+	return s.LoginFunc(code)
 }
 
 func (s *MockStore) GetConfig() string {

@@ -43,6 +43,7 @@ func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 			if err := rec.PostMessage(msg, false); err != nil {
 				return fmt.Errorf("failed to post message: %v", err)
 			}
+			return
 		}
 
 		if err := g.SaveConfig(); err != nil {

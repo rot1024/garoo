@@ -47,7 +47,7 @@ func initSQLite(conf *Config) (garoo.Store, error) {
 				p = u.Opaque
 			}
 			s, err := os.Stat(p)
-			if err != nil {
+			if err == nil {
 				slog.Info("sqlite", "path", p, "mode", s.Mode().String())
 			}
 		}

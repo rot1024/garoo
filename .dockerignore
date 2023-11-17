@@ -1,4 +1,10 @@
 .env
+.env.sample
 .git
+.gitignore
 .vscode
 *.db
+docker-compose.yml
+Dockerfile
+LICENSE
+README.md

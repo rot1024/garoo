@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . /app/
 
-RUN CGO_ENABLED=1 go build -a -ldflags '-linkmode external -extldflags "-static"' -o garoo-app .
+RUN CGO_ENABLED=1 go build -a --tags timetzdata -ldflags '-linkmode external -extldflags "-static"' -o garoo-app .
 
 FROM scratch
 

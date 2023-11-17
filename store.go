@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
-	"os"
-	"strings"
 
 	"github.com/rot1024/garoo/dropbox"
 	"github.com/rot1024/garoo/garoo"
@@ -35,16 +32,6 @@ func initStores(conf *Config) (res []garoo.Store, _ error) {
 func initSQLite(conf *Config) (garoo.Store, error) {
 	if conf.SQLite.DSN == "" {
 		return nil, nil
-	}
-
-	// check permission
-	if !strings.HasPrefix(conf.SQLite.DSN, ":memory:") {
-		s, err := os.Stat(conf.SQLite.DSN)
-		if err != nil {
-			return nil, nil // ignore
-		}
-
-		slog.Info("sqlite", "file", conf.SQLite.DSN, "mode", s.Mode().String())
 	}
 
 	return sqlite.New(conf.SQLite.DSN)

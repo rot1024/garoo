@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"os/user"
 	"syscall"
 
 	"github.com/rot1024/garoo/garoo"
@@ -21,12 +20,6 @@ func main() {
 
 func main2() error {
 	slog.Info("garoo")
-
-	u, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("failed to get current user: %v", err)
-	}
-	slog.Info("user", "user", u.Username, "uid", u.Uid, "gid", u.Gid)
 
 	conf, err := LoadConfig()
 	if err != nil {

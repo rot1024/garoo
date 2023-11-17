@@ -33,6 +33,7 @@ type Config struct {
 	BaseDir      string `json:"base_dir"`
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	RedirectURL  string `json:"redirect_uri"`
 }
 
 var _ garoo.Store = (*Store)(nil)

@@ -57,5 +57,6 @@ func initDropbox(conf *Config) (garoo.Store, error) {
 		BaseDir:      conf.Dropbox.BaseDir,
 		ClientID:     conf.Dropbox.Client_ID,
 		ClientSecret: conf.Dropbox.Client_Secret,
+		RedirectURL:  conf.Dropbox.Redirect_URL,
 	}), nil
 }

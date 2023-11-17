@@ -25,7 +25,7 @@ func (s *Store) Init(conf string) error {
 }
 
 func (s *Store) RequestLogin() (string, error) {
-	return s.oauth2Conf.AuthCodeURL("state"), nil
+	return s.oauth2Conf.AuthCodeURL("state", oauth2.AccessTypeOffline), nil
 }
 
 func (s *Store) Login(code string) error {
@@ -88,6 +88,7 @@ func oauth2Config(config Config) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
+		RedirectURL:  config.RedirectURL,
 		Endpoint:     dropbox.OAuthEndpoint(""),
 		Scopes:       []string{"files.content.write", "files.content.read"},
 	}

@@ -45,6 +45,7 @@ type DropboxConfig struct {
 	BaseDir       string `json:"base_dir"`
 	Client_ID     string `json:"client_id"`
 	Client_Secret string `json:"client_secret"`
+	Redirect_URL  string `json:"redirect_url"`
 }
 
 func LoadConfig() (*Config, error) {

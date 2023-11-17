@@ -26,7 +26,7 @@ func (s *Store) Init(conf string) error {
 
 func (s *Store) Login(code string) (string, error) {
 	if code == "" {
-		return s.oauth2Conf.AuthCodeURL("state", oauth2.AccessTypeOffline), nil
+		return s.oauth2Conf.AuthCodeURL("state", oauth2.SetAuthURLParam("token_access_type", "offline")), nil
 	}
 
 	token, err := s.oauth2Conf.Exchange(context.Background(), code)

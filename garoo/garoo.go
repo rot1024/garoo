@@ -104,6 +104,11 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 	var errors int
 	for i, seed := range seeds {
 		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
+		if len(seeds) > 1 {
+			if err := rec.PostMessage(fmt.Sprintf("PROCESSING %d/%d: %s (%s)", i+1, le, seed.ID, seed.Provider), false); err != nil {
+				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
+			}
+		}
 
 		if err := g.processSeed(seed); err != nil {
 			errors++

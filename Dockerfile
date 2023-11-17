@@ -8,12 +8,14 @@ RUN go mod download
 
 COPY . /app/
 
-RUN CGO_ENABLED=1 go build -a --tags timetzdata -ldflags '-linkmode external -extldflags "-static"' -o garoo-app .
+RUN go build --tags timetzdata -o garoo-app .
 
-FROM scratch
+FROM alpine
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /app/garoo-app /app/garoo
+
+RUN chomod a+rw /app
 
 WORKDIR /app
 

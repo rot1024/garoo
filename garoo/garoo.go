@@ -228,6 +228,15 @@ func (g *Garoo) processSeed(seed Seed) error {
 	return nil
 }
 
+func (g *Garoo) findProvider(name string) Provider {
+	for _, provider := range g.providers {
+		if provider.Name() == name {
+			return provider
+		}
+	}
+	return nil
+}
+
 func (g *Garoo) findStore(name string) Store {
 	for _, store := range g.stores {
 		if store.Name() == name {

@@ -76,8 +76,13 @@ func (d *Receiver) PostMessage(msg string, mentionToUser bool) error {
 
 func (d *Receiver) Start() error {
 	if err := d.session.Open(); err != nil {
-		return fmt.Errorf("failed to open session: %v", err)
+		return fmt.Errorf("failed to ospen session: %v", err)
 	}
+
+	if err := d.PostMessage("READY", false); err != nil {
+		return fmt.Errorf("failed to post message: %v", err)
+	}
+
 	return nil
 }
 

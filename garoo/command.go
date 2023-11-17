@@ -5,7 +5,7 @@ import (
 	"log/slog"
 )
 
-func (g *Garoo) processCommand(args []string, rec Receiver) error {
+func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 	switch args[0] {
 	case "request-login":
 		if len(args) < 2 {
@@ -14,33 +14,62 @@ func (g *Garoo) processCommand(args []string, rec Receiver) error {
 
 		slog.Info("requesting login", "store", args[1])
 
-		store := g.findStore(args[1])
-		if store == nil {
-			return fmt.Errorf("store not found")
+		var url string
+		name := args[1]
+
+		if provider := g.findProvider(name); provider != nil {
+			url, err = provider.RequestLogin()
+			if err != nil {
+				return fmt.Errorf("failed to request login from %s: %v", name, err)
+			}
+		}
+		if store := g.findStore(name); store != nil {
+			url, err = store.RequestLogin()
+			if err != nil {
+				return fmt.Errorf("failed to request login from %s: %v", name, err)
+			}
 		}
 
-		url, err := store.RequestLogin()
-		if err != nil {
-			return fmt.Errorf("failed to request login: %v", err)
+		if url != "" {
+			if err := rec.PostMessage(url, false); err != nil {
+				return fmt.Errorf("failed to post message: %v", err)
+			}
+			return nil
 		}
 
-		if err := rec.PostMessage(url, false); err != nil {
+		if err := rec.PostMessage("not found", false); err != nil {
 			return fmt.Errorf("failed to post message: %v", err)
 		}
+		return fmt.Errorf("not found")
 	case "login":
-		if len(args) < 3 {
-			return fmt.Errorf("invalid arg count")
+		loggedIn := false
+		name := args[1]
+		var code string
+		if len(args) > 2 {
+			code = args[2]
 		}
 
-		slog.Info("logging in", "store", args[1])
+		slog.Info("logging in", "name", name)
 
-		store := g.findStore(args[1])
-		if store == nil {
-			return fmt.Errorf("store not found")
+		if provider := g.findProvider(name); provider != nil {
+			if err := provider.Login(code); err != nil {
+				return fmt.Errorf("failed to login to %s: %v", name, err)
+			}
+			loggedIn = true
 		}
 
-		if err := store.Login(args[2]); err != nil {
-			return fmt.Errorf("failed to login: %v", err)
+		if store := g.findStore(name); store != nil {
+			if err := store.Login(code); err != nil {
+				return fmt.Errorf("failed to login to %s: %v", name, err)
+			}
+			loggedIn = true
+		}
+
+		if !loggedIn {
+			if err := rec.PostMessage("not found", false); err != nil {
+				return fmt.Errorf("failed to post message: %v", err)
+			}
+			return fmt.Errorf("not found")
 		}
 
 		if err := g.SaveConfig(); err != nil {
@@ -64,6 +93,6 @@ func (g *Garoo) processCommand(args []string, rec Receiver) error {
 }
 
 const help = `
-garo request-login <store>
-garo login <store> <code>
+garo request-login <service>
+garo login <service> <code>
 `

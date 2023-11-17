@@ -54,7 +54,11 @@ func TestGaroo(t *testing.T) {
 	}
 
 	store := &MockStore{
-		NameFunc: func() string { return "store" },
+		NameFunc:         func() string { return "store" },
+		InitFunc:         func(string) error { return nil },
+		RequestLoginFunc: func() (string, error) { return "", nil },
+		LoginFunc:        func(string) error { return nil },
+		GetConfigFunc:    func() string { return "" },
 		SaveFunc: func(p *Post) error {
 			return nil
 		},
@@ -77,6 +81,7 @@ func TestGaroo(t *testing.T) {
 	handler(msg, receiver)
 	assert.Equal(t, []string{
 		"initializing provider provider=provider",
+		"initializing store store=store",
 		"saved config",
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",

@@ -13,6 +13,7 @@ require (
 	github.com/n0madic/twitter-scraper v0.0.0-20231104223941-296710769dd8
 	github.com/samber/lo v1.38.1
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 )
 
 require (
@@ -23,7 +24,6 @@ require (
 	golang.org/x/crypto v0.15.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/net v0.18.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5 // indirect
 	golang.org/x/sys v0.14.0 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect

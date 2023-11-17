@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -51,7 +52,7 @@ type DropboxConfig struct {
 func LoadConfig() (*Config, error) {
 	// load .env
 	err := godotenv.Load()
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to load .env: %v", err)
 	}
 

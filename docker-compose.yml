@@ -1,0 +1,16 @@
+version: '3'
+name: garoo
+services:
+  garoo:
+    # image: rot1024/garoo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: 1000:1000
+    volumes:
+      - ./garoo.db:/app/garoo.db
+      - '/etc/group:/etc/group:ro'
+      - '/etc/passwd:/etc/passwd:ro'
+    env_file:
+      - ./.env
+    restart: unless-stopped

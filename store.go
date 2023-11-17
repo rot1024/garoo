@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/rot1024/garoo/dropbox"
@@ -38,22 +39,28 @@ func initSQLite(conf *Config) (garoo.Store, error) {
 		return nil, nil
 	}
 
-	// check permission
-	if !strings.HasPrefix(conf.SQLite.DSN, ":memory:") {
-		u, err := url.Parse(conf.SQLite.DSN)
+	printPermission(conf.SQLite.DSN)
+	return sqlite.New(conf.SQLite.DSN)
+}
+
+func printPermission(dsn string) {
+	if !strings.HasPrefix(dsn, ":memory:") {
+		u, err := url.Parse(dsn)
 		if err == nil && (u.Scheme == "file" || u.Scheme == "") {
 			p := u.Path
 			if p == "" {
 				p = u.Opaque
 			}
+			d := path.Dir(p)
 			s, err := os.Stat(p)
 			if err == nil {
-				slog.Info("sqlite", "path", p, "mode", s.Mode().String())
+				s2, err := os.Stat(d)
+				if err == nil {
+					slog.Info("sqlite", "path", p, "dir", d, "mode", s.Mode().String(), "dir mode", s2.Mode().String())
+				}
 			}
 		}
 	}
-
-	return sqlite.New(conf.SQLite.DSN)
 }
 
 func initNotion(conf *Config) (garoo.Store, error) {

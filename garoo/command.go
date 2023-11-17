@@ -3,7 +3,18 @@ package garoo
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 )
+
+const cmd = "garoo"
+
+const help = `
+garo login <service> <code?>
+`
+
+func isCommand(msg string) bool {
+	return msg == cmd || strings.HasPrefix(msg, cmd+" ")
+}
 
 func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 	switch args[0] {
@@ -65,7 +76,3 @@ func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 	}
 	return nil
 }
-
-const help = `
-garo login <service> <code?>
-`

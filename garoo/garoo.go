@@ -75,7 +75,7 @@ func New(options Options) *Garoo {
 func (g *Garoo) handler(msg *Message, rec Receiver) {
 	slog.Info("received message", "receiver", rec.Name(), "msg", msg.Content)
 
-	if strings.HasPrefix(msg.Content, "garo ") {
+	if isCommand(msg.Content) {
 		args := strings.Split(msg.Content, " ")
 
 		if err := g.processCommand(args[1:], rec); err != nil {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -311,7 +312,12 @@ func (s *Store) dirpathWithAuthorName(p *garoo.Post) string {
 
 func filename(p *garoo.Post, i int) string {
 	screenname := strings.ToLower(p.Author.ScreenName)
-	ext := path.Ext(p.Media[i].URL)
+	f := p.Media[i].URL
+	if u, err := url.Parse(f); err == nil {
+		f = u.Path
+	}
+
+	ext := path.Ext(f)
 	if len(p.Media) == 1 {
 		return fmt.Sprintf("%s_%s%s", screenname, p.ID, ext)
 	}

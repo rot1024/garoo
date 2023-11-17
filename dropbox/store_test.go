@@ -38,7 +38,7 @@ func TestStore(t *testing.T) {
 		Provider: "twitter",
 		Media: []garoo.Media{
 			{
-				URL: "https://example.com/foo.jpg",
+				URL: "https://example.com/foo.jpg?aaa=bbb",
 			},
 		},
 		Author: garoo.Author{

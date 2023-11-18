@@ -94,7 +94,7 @@ func TestGaroo(t *testing.T) {
 	}, l.Logs())
 	assert.Equal(t, []string{
 		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
-		"✅",
+		"✅ DONE!",
 	}, messages)
 
 	// test 2: fail to get post

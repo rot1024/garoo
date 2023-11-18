@@ -11,6 +11,7 @@ import (
 )
 
 const retryCount = 2
+const textCategory = "_"
 
 type Store struct {
 	client   *notionapi.Client
@@ -44,7 +45,8 @@ func (s *Store) Save(post *garoo.Post) error {
 	ctx := context.Background()
 	var authorPageID *notionapi.PageID
 
-	if !isText(post) {
+	text := isText(post)
+	if !text {
 		slog.Info("notion: get author", "authorID", post.Author.ID)
 		ap1, err := s.getAuthor(ctx, &post.Author)
 		if err != nil {
@@ -67,17 +69,17 @@ func (s *Store) Save(post *garoo.Post) error {
 	}
 
 	if len(postPageIDs) == 0 {
-		medias := post.Media
-		if len(medias) == 0 {
-			medias = append(medias, garoo.Media{
-				URL: post.URL, // dummy
-			})
-		}
-
-		for i := range medias {
-			slog.Info("notion: create post", "postID", post.ID, "index", i+1, "total", len(post.Media))
-			if err := s.savePost(ctx, post, i, nil, authorPageID); err != nil {
+		if text {
+			slog.Info("notion: create text post", "postID", post.ID)
+			if err := s.savePost(ctx, post, 0, nil, authorPageID); err != nil {
 				return fmt.Errorf("failed to save post: %v", err)
+			}
+		} else {
+			for i := range post.Media {
+				slog.Info("notion: create post", "postID", post.ID, "index", i+1, "total", len(post.Media))
+				if err := s.savePost(ctx, post, i, nil, authorPageID); err != nil {
+					return fmt.Errorf("failed to save post: %v", err)
+				}
 			}
 		}
 	} else {
@@ -146,6 +148,7 @@ func (s *Store) getAuthor(ctx context.Context, a *garoo.Author) (*notionapi.Page
 	return lo.ToPtr(notionapi.PageID(q.Results[0].ID)), nil
 }
 
+// if i == 0, post should be handled as text
 func (s *Store) savePost(ctx context.Context, post *garoo.Post, i int, pageID, authorPageID *notionapi.PageID) (err error) {
 	properties := postProperties(post, i, authorPageID)
 
@@ -220,7 +223,7 @@ func retry[T any](n int, f func() (T, error)) (res T, err error) {
 }
 
 func isText(post *garoo.Post) bool {
-	return len(post.Media) == 0 || post.Category == "_"
+	return len(post.Media) == 0 || post.Category == textCategory
 }
 
 func (s *Store) GetConfig() string {

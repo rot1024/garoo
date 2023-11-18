@@ -2,6 +2,7 @@ package notion
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jomei/notionapi"
@@ -72,11 +73,12 @@ func authorProperties(p *garoo.Author) notionapi.Properties {
 	}
 }
 
+// if i == 0, post should be handled as text
 func postProperties(p *garoo.Post, i int, authorPageID *notionapi.PageID) notionapi.Properties {
 	tags := p.Tags
-	if len(p.Media) > 0 {
+	if i > 0 && len(p.Media) > 0 {
 		m := p.Media[i]
-		if m.Type == garoo.MediaTypeVideo {
+		if m.Type == garoo.MediaTypeVideo && !slices.Contains(tags, "video") {
 			tags = append(tags, "video")
 		}
 	}
@@ -120,7 +122,7 @@ func postProperties(p *garoo.Post, i int, authorPageID *notionapi.PageID) notion
 		},
 	}
 
-	if p.Category != "" && p.Category != "-" && p.Category != "_" {
+	if p.Category != "" && p.Category != "-" && p.Category != textCategory {
 		properties[propertyPostCategory] = notionapi.SelectProperty{
 			Type: notionapi.PropertyTypeSelect,
 			Select: notionapi.Option{
@@ -151,7 +153,7 @@ func postProperties(p *garoo.Post, i int, authorPageID *notionapi.PageID) notion
 		}
 	}
 
-	if len(p.Media) > 0 {
+	if i > 0 && len(p.Media) > 0 {
 		m := p.Media[i]
 		mediaProperty := &notionapi.FilesProperty{
 			Type: notionapi.PropertyTypeFiles,

@@ -84,6 +84,7 @@ func (d *Receiver) PostMessage(req garoo.PostMessageRequest) error {
 	if err != nil {
 		return fmt.Errorf("failed to send message: %v", err)
 	}
+
 	return nil
 }
 

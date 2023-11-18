@@ -139,7 +139,7 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 	slog.Info("done")
 	if errors == 0 {
 		if err := rec.PostMessage(PostMessageRequest{
-			Message:        "✅",
+			Message:        "✅ DONE!",
 			ReplyToMessage: msg.ID,
 		}); err != nil {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)

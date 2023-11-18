@@ -5,17 +5,23 @@ type Handler func(*Message, Receiver)
 type Receiver interface {
 	Name() string
 	AddHandler(Handler)
-	PostMessage(string, bool) error
+	PostMessage(PostMessageRequest) error
 	Start() error
 	Stop() error
 	SaveConfig(any) error
 	LoadConfig(any) error
 }
 
+type PostMessageRequest struct {
+	Message        string
+	MentionToUser  bool
+	ReplyToMessage string
+}
+
 type MockReceiver struct {
 	NameFunc        func() string
 	AddHandlerFunc  func(Handler)
-	PostMessageFunc func(string, bool) error
+	PostMessageFunc func(PostMessageRequest) error
 	StartFunc       func() error
 	StopFunc        func() error
 	SaveConfigFunc  func(any) error
@@ -32,8 +38,8 @@ func (r *MockReceiver) AddHandler(h Handler) {
 	r.AddHandlerFunc(h)
 }
 
-func (r *MockReceiver) PostMessage(msg string, mentionToUser bool) error {
-	return r.PostMessageFunc(msg, mentionToUser)
+func (r *MockReceiver) PostMessage(req PostMessageRequest) error {
+	return r.PostMessageFunc(req)
 }
 
 func (r *MockReceiver) Start() error {

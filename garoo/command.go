@@ -44,14 +44,18 @@ func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 		}
 
 		if !loggedIn {
-			if err := rec.PostMessage("not found", false); err != nil {
+			if err := rec.PostMessage(PostMessageRequest{
+				Message: "not found",
+			}); err != nil {
 				return fmt.Errorf("failed to post message: %v", err)
 			}
 			return fmt.Errorf("not found")
 		}
 
 		if msg != "" {
-			if err := rec.PostMessage(msg, false); err != nil {
+			if err := rec.PostMessage(PostMessageRequest{
+				Message: msg,
+			}); err != nil {
 				return fmt.Errorf("failed to post message: %v", err)
 			}
 			return
@@ -61,15 +65,21 @@ func (g *Garoo) processCommand(args []string, rec Receiver) (err error) {
 			return fmt.Errorf("failed to save config: %v", err)
 		}
 
-		if err := rec.PostMessage("DONE!", false); err != nil {
+		if err := rec.PostMessage(PostMessageRequest{
+			Message: "DONE",
+		}); err != nil {
 			return fmt.Errorf("failed to post message: %v", err)
 		}
 	case "help":
-		if err := rec.PostMessage(help, false); err != nil {
+		if err := rec.PostMessage(PostMessageRequest{
+			Message: help,
+		}); err != nil {
 			return fmt.Errorf("failed to post message: %v", err)
 		}
 	default:
-		if err := rec.PostMessage("unknown command", false); err != nil {
+		if err := rec.PostMessage(PostMessageRequest{
+			Message: fmt.Sprintf("unknown command: %s", args[0]),
+		}); err != nil {
 			return fmt.Errorf("failed to post message: %v", err)
 		}
 		return fmt.Errorf("unknown command")

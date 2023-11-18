@@ -81,7 +81,11 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 		if err := g.processCommand(args[1:], rec); err != nil {
 			slog.Error("failed to process command", "args", args[1:], "err", err)
 
-			if err := rec.PostMessage(fmt.Sprintf("ERROR: %v", err), true); err != nil {
+			if err := rec.PostMessage(PostMessageRequest{
+				Message:        fmt.Sprintf("ERROR: %v", err),
+				MentionToUser:  true,
+				ReplyToMessage: msg.ID,
+			}); err != nil {
 				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 			}
 		}
@@ -97,25 +101,34 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 	}
 
 	slog.Info("found seed(s)", "count", le)
-	if err := rec.PostMessage(fmt.Sprintf("ACCEPTED %d items", le), false); err != nil {
-		slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
-	}
 
 	var errors int
 	for i, seed := range seeds {
 		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
-		if len(seeds) > 1 {
-			if err := rec.PostMessage(fmt.Sprintf("PROCESSING %d/%d: %s (%s)", i+1, le, seed.ID, seed.Provider), false); err != nil {
-				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
-			}
+		if err := rec.PostMessage(PostMessageRequest{
+			Message: fmt.Sprintf(
+				"⬇️ %d/%d: %s (provider=%s category=%s tags=%s)", i+1,
+				le,
+				seed.ID,
+				seed.Provider,
+				seed.Category,
+				strings.Join(seed.Tags, ","),
+			),
+			ReplyToMessage: msg.ID,
+		}); err != nil {
+			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 
 		if err := g.processSeed(seed); err != nil {
 			errors++
-			errmsg := fmt.Sprintf("ERROR (%d/%d): %v", i+1, le, err)
+			errmsg := fmt.Sprintf("❌ %d/%d: %v", i+1, le, err)
 
 			slog.Error("failed to process seed", "err", errmsg)
-			if err := rec.PostMessage(errmsg, true); err != nil {
+			if err := rec.PostMessage(PostMessageRequest{
+				Message:        errmsg,
+				MentionToUser:  true,
+				ReplyToMessage: msg.ID,
+			}); err != nil {
 				slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 			}
 		} else {
@@ -125,7 +138,10 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 
 	slog.Info("done")
 	if errors == 0 {
-		if err := rec.PostMessage("DONE!", false); err != nil {
+		if err := rec.PostMessage(PostMessageRequest{
+			Message:        "✅",
+			ReplyToMessage: msg.ID,
+		}); err != nil {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 	}

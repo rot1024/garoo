@@ -59,15 +59,28 @@ func (d *Receiver) AddHandler(h garoo.Handler) {
 	})
 }
 
-func (d *Receiver) PostMessage(msg string, mentionToUser bool) error {
-	if mentionToUser && d.userID != "" {
+func (d *Receiver) PostMessage(req garoo.PostMessageRequest) error {
+	msg := req.Message
+	if req.MentionToUser && d.userID != "" {
 		msg = fmt.Sprintf("<@%s> %s", d.userID, msg)
 	}
 
 	// Must be 2000 or fewer in length
 	msg = msg[:min(len(msg), 2000)]
 
-	_, err := d.session.ChannelMessageSend(d.channelID, msg)
+	var ref *discordgo.MessageReference
+	if req.ReplyToMessage != "" {
+		ref = &discordgo.MessageReference{
+			MessageID: req.ReplyToMessage,
+		}
+	}
+	_, err := d.session.ChannelMessageSendComplex(
+		d.channelID,
+		&discordgo.MessageSend{
+			Content:   msg,
+			Reference: ref,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %v", err)
 	}
@@ -79,7 +92,9 @@ func (d *Receiver) Start() error {
 		return fmt.Errorf("failed to ospen session: %v", err)
 	}
 
-	if err := d.PostMessage("READY", false); err != nil {
+	if err := d.PostMessage(garoo.PostMessageRequest{
+		Message: "READY",
+	}); err != nil {
 		return fmt.Errorf("failed to post message: %v", err)
 	}
 

@@ -30,8 +30,8 @@ func TestGaroo(t *testing.T) {
 		AddHandlerFunc: func(h Handler) {
 			handler = h
 		},
-		PostMessageFunc: func(msg string, mentionToUser bool) error {
-			messages = append(messages, msg)
+		PostMessageFunc: func(r PostMessageRequest) error {
+			messages = append(messages, r.Message)
 			return nil
 		},
 		SaveConfigFunc: func(config any) error { return nil },
@@ -93,8 +93,8 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"ACCEPTED 1 items",
-		"DONE!",
+		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"✅",
 	}, messages)
 
 	// test 2: fail to get post
@@ -109,13 +109,13 @@ func TestGaroo(t *testing.T) {
 		"found seed(s) count=1",
 		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
 		"getting post provider=provider id=postID",
-		"failed to process seed err=ERROR (1/1): failed to get post from provider: failed to get post",
+		"failed to process seed err=❌ 1/1: failed to get post from provider: failed to get post",
 		"done",
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"ACCEPTED 1 items",
-		"ERROR (1/1): failed to get post from provider: failed to get post",
+		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"❌ 1/1: failed to get post from provider: failed to get post",
 	}, messages)
 
 	// test 3: fail to save post
@@ -138,13 +138,13 @@ func TestGaroo(t *testing.T) {
 		"getting post provider=provider id=postID",
 		"got post id=postID provider=provider",
 		"saving post store=store",
-		"failed to process seed err=ERROR (1/1): failed to save post to store: failed to save post",
+		"failed to process seed err=❌ 1/1: failed to save post to store: failed to save post",
 		"done",
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"ACCEPTED 1 items",
-		"ERROR (1/1): failed to save post to store: failed to save post",
+		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"❌ 1/1: failed to save post to store: failed to save post",
 	}, messages)
 }
 

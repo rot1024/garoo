@@ -1,4 +1,4 @@
-FROM golang:1.21 AS build
+FROM golang:1.21-alpine AS build
 
 COPY go.mod go.sum /app/
 WORKDIR /app
@@ -9,6 +9,8 @@ COPY . /app/
 RUN go build --tags timetzdata -o garoo-app .
 
 FROM chromedp/headless-shell:latest
+
+RUN apt-get update && apt install ca-certificates -y
 
 COPY --from=build /app/garoo-app /usr/local/bin/app
 

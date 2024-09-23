@@ -238,7 +238,7 @@ func (g *Garoo) processSeed(ctx context.Context, seed Seed) error {
 
 		post.Category = seed.Category
 		post.Tags = seed.Tags
-		slog.Info(fmt.Sprintf("got post: %#v", seed))
+		slog.Info(fmt.Sprintf("got post: %#v", post))
 
 		for _, store := range g.stores {
 			slog.Info("saving post", "store", store.Name())

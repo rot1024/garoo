@@ -10,6 +10,7 @@ import (
 )
 
 var ErrInvalidURL = errors.New("invalid url")
+var ErrInvalidPost = errors.New("invalid post")
 
 func InitChromeDP(ctx context.Context, logger Logger) (context.Context, context.CancelFunc) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -39,6 +40,10 @@ func GetPostFromURL(ctx context.Context, url string) (*Post, error) {
 		return nil, err
 	}
 
+	if !checkPost(post) {
+		return nil, ErrInvalidPost
+	}
+
 	return post, nil
 }
 
@@ -53,7 +58,15 @@ func GetPost(ctx context.Context, id, screenname string) (*Post, error) {
 		return nil, err
 	}
 
+	if !checkPost(post) {
+		return nil, ErrInvalidPost
+	}
+
 	return post, nil
+}
+
+func checkPost(p *Post) bool {
+	return p.URL != "" && p.ID != "" && p.Text != "" && p.Time != "" && p.Autor.ID != "" && p.Autor.Name != "" && p.Autor.Screename != "" && p.Autor.URL != ""
 }
 
 func getIDAndScreenNameFromURL(u string) (string, string) {

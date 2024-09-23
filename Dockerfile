@@ -10,8 +10,6 @@ RUN go build --tags timetzdata -o garoo-app .
 
 FROM chromedp/headless-shell:latest
 
-COPY --from=build /app/garoo-app /app/garoo
+COPY --from=build /app/garoo-app /usr/local/bin/app
 
-WORKDIR /app
-
-CMD [ "/app/garoo" ]
+ENTRYPOINT [ "/usr/local/bin/app" ]

@@ -30,7 +30,16 @@ func tasks(id, screename string, post *Post) chromedp.Tasks {
 			return nil
 		}),
 		// text
-		chromedp.TextContent(`[data-testid=tweetText]`, &post.Text, chromedp.ByQuery),
+		chromedp.AttributeValue(`meta[property="og:title"]`, "content", &post.Text, nil, chromedp.ByQuery),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if strings.HasSuffix(post.Text, " / X") {
+				post.Text = strings.TrimSuffix(post.Text, " / X")
+			} else {
+				post.Text = strings.TrimSuffix(post.Text, " / Twitter")
+			}
+			return nil
+		}),
+		// chromedp.TextContent(`[data-testid=tweetText]`, &post.Text, chromedp.ByQuery),
 		// time
 		chromedp.AttributeValue(`time`, "datetime", &post.Time, nil, chromedp.ByQuery),
 		// photos
@@ -177,11 +186,6 @@ func fixPhotoURL(u string) (string, error) {
 	}
 
 	q := u2.Query()
-	if q.Has("name") {
-		q.Set("name", "large")
-		u2.RawQuery = q.Encode()
-	}
-
 	// notion returns an error if the path does not have an extension
 	if format := q.Get("format"); format != "" {
 		if path.Ext(u2.Path) == "" {
@@ -189,6 +193,7 @@ func fixPhotoURL(u string) (string, error) {
 		}
 	}
 
+	u2.RawQuery = ""
 	return u2.String(), nil
 }
 

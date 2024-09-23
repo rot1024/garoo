@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/rot1024/garoo/garoo"
+	"github.com/rot1024/garoo/twitter_scraper"
 	"github.com/samber/lo"
 )
 
@@ -61,11 +63,16 @@ func main2() error {
 		return s.Name()
 	}))
 
+	// init context
+	ctx, cancel := twitter_scraper.InitChromeDP(context.Background(), infof)
+	defer cancel()
+
 	g := garoo.New(garoo.Options{
 		Receivers:    receivers,
 		Providers:    providers,
 		Stores:       stores,
 		MainReceiver: receivers[0],
+		Context:      ctx,
 	})
 
 	if err := g.Start(); err != nil {
@@ -91,4 +98,8 @@ func main2() error {
 
 	slog.Info("stopped garoo")
 	return nil
+}
+
+func infof(format string, v ...interface{}) {
+	slog.Info(fmt.Sprintf(format, v...))
 }

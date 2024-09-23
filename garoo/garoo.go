@@ -1,10 +1,10 @@
 package garoo
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 	"time"
 
@@ -16,6 +16,7 @@ type Garoo struct {
 	providers    []Provider
 	stores       []Store
 	mainReceiver Receiver
+	context      context.Context
 }
 
 type Options struct {
@@ -23,6 +24,7 @@ type Options struct {
 	Providers    []Provider
 	Stores       []Store
 	MainReceiver Receiver
+	Context      context.Context
 }
 
 type config struct {
@@ -32,11 +34,16 @@ type config struct {
 }
 
 func New(options Options) *Garoo {
+	if options.Context == nil {
+		options.Context = context.Background()
+	}
+
 	g := &Garoo{
 		receivers:    options.Receivers,
 		providers:    options.Providers,
 		stores:       options.Stores,
 		mainReceiver: options.MainReceiver,
+		context:      options.Context,
 	}
 
 	for _, receiver := range g.receivers {
@@ -104,12 +111,12 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 
 	var errors int
 	for i, seed := range seeds {
-		slog.Info("processing seed", "index", i+1, "total", le, "id", seed.ID, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
+		slog.Info("processing seed", "index", i+1, "total", le, "url", seed.URL, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
 		if err := rec.PostMessage(PostMessageRequest{
 			Message: fmt.Sprintf(
 				"⬇️ %d/%d: %s (provider=%s category=%s tags=%s)", i+1,
 				le,
-				seed.ID,
+				seed.URL,
 				seed.Provider,
 				seed.Category,
 				strings.Join(seed.Tags, ","),
@@ -119,7 +126,7 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 
-		if err := g.processSeed(seed); err != nil {
+		if err := g.processSeed(g.context, seed); err != nil {
 			errors++
 			errmsg := fmt.Sprintf("❌ %d/%d: %v", i+1, le, err)
 
@@ -206,14 +213,8 @@ func (g *Garoo) getSeeds(msgs []string) []Seed {
 	return lo.FilterMap(msgs, func(msg string, _ int) (Seed, bool) {
 		u, _, _ := strings.Cut(msg, " ")
 		for _, provider := range g.providers {
-			url, err := url.Parse(u)
-			if err != nil {
-				continue
-			}
-
-			id := provider.ExtractPostID(url)
-			if id != "" {
-				return SeedFrom(id, provider.Name(), msg), true
+			if provider.Check(u) {
+				return SeedFrom(u, provider.Name(), msg), true
 			}
 		}
 
@@ -221,15 +222,15 @@ func (g *Garoo) getSeeds(msgs []string) []Seed {
 	})
 }
 
-func (g *Garoo) processSeed(seed Seed) error {
+func (g *Garoo) processSeed(ctx context.Context, seed Seed) error {
 	for _, provider := range g.providers {
 		if provider.Name() != seed.Provider {
 			continue
 		}
 
-		slog.Info("getting post", "provider", seed.Provider, "id", seed.ID)
+		slog.Info("getting post", "provider", seed.Provider, "url", seed.URL)
 
-		post, err := provider.GetPost(seed.ID)
+		post, err := provider.GetPost(ctx, seed.URL)
 		if err != nil {
 			return fmt.Errorf("failed to get post from %s: %v", provider.Name(), err)
 		}

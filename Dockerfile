@@ -1,6 +1,4 @@
-FROM golang:1.21-alpine AS build
-
-RUN apk add --update --no-cache git ca-certificates build-base
+FROM golang:1.21 AS build
 
 COPY go.mod go.sum /app/
 WORKDIR /app
@@ -10,13 +8,10 @@ COPY . /app/
 
 RUN go build --tags timetzdata -o garoo-app .
 
-FROM alpine
+FROM chromedp/headless-shell:latest
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /app/garoo-app /app/garoo
-
-RUN chmod a+rw /app
 
 WORKDIR /app
 
-CMD [ "./garoo" ]
+CMD [ "/app/garoo" ]

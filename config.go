@@ -12,7 +12,7 @@ const CONFIG_PREFIX = "GAROO"
 
 type Config struct {
 	Discord DiscordConfig `json:"discord"`
-	Twitter TwitterConfig `json:"twitter"`
+	// Twitter TwitterConfig `json:"twitter"`
 	SQLite  SQLiteConfig  `json:"sqlite"`
 	Notion  NotionConfig  `json:"notion"`
 	Dropbox DropboxConfig `json:"dropbox"`
@@ -24,11 +24,11 @@ type DiscordConfig struct {
 	User    string `json:"user"`
 }
 
-type TwitterConfig struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
-}
+// type TwitterConfig struct {
+// 	User     string `json:"user"`
+// 	Password string `json:"password"`
+// 	Email    string `json:"email"`
+// }
 
 type SQLiteConfig struct {
 	DSN string `json:"dsn"`

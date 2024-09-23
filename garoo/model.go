@@ -12,13 +12,13 @@ type Message struct {
 }
 
 type Seed struct {
-	ID       string   `json:"id"`
+	URL      string   `json:"url"`
 	Provider string   `json:"provider"`
 	Category string   `json:"category,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
 }
 
-func SeedFrom(postID, provider, message string) Seed {
+func SeedFrom(url, provider, message string) Seed {
 	msgs := strings.Split(message, " ")
 	var cat string
 	var tags []string
@@ -34,7 +34,7 @@ func SeedFrom(postID, provider, message string) Seed {
 	}
 
 	return Seed{
-		ID:       postID,
+		URL:      url,
 		Provider: provider,
 		Category: cat,
 		Tags:     tags,

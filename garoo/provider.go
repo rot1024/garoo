@@ -1,23 +1,23 @@
 package garoo
 
-import "net/url"
+import "context"
 
 type Provider interface {
 	Init(string) error
 	Login(string) (string, error)
 	Name() string
-	ExtractPostID(*url.URL) string
-	GetPost(id string) (*Post, error)
+	Check(url string) bool
+	GetPost(ctx context.Context, url string) (*Post, error)
 	GetConfig() string
 }
 
 type MockProvider struct {
-	NameFunc          func() string
-	InitFunc          func(string) error
-	LoginFunc         func(string) (string, error)
-	ExtractPostIDFunc func(*url.URL) string
-	GetPostFunc       func(string) (*Post, error)
-	GetConfigFunc     func() string
+	NameFunc      func() string
+	InitFunc      func(string) error
+	LoginFunc     func(string) (string, error)
+	CheckFunc     func(string) bool
+	GetPostFunc   func(context.Context, string) (*Post, error)
+	GetConfigFunc func() string
 }
 
 var _ Provider = (*MockProvider)(nil)
@@ -34,12 +34,12 @@ func (p *MockProvider) Login(code string) (string, error) {
 	return p.LoginFunc(code)
 }
 
-func (p *MockProvider) ExtractPostID(u *url.URL) string {
-	return p.ExtractPostIDFunc(u)
+func (p *MockProvider) Check(u string) bool {
+	return p.CheckFunc(u)
 }
 
-func (p *MockProvider) GetPost(id string) (*Post, error) {
-	return p.GetPostFunc(id)
+func (p *MockProvider) GetPost(ctx context.Context, url string) (*Post, error) {
+	return p.GetPostFunc(ctx, url)
 }
 
 func (p *MockProvider) GetConfig() string {

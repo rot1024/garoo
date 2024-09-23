@@ -1,6 +1,7 @@
 package twitter
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -70,20 +71,25 @@ func (x *Provider) Login(code string) (string, error) {
 	return "", nil
 }
 
-func (*Provider) ExtractPostID(u *url.URL) string {
-	if !slices.Contains(hostnames, u.Hostname()) {
-		return ""
+func (*Provider) Check(u string) bool {
+	u2, err := url.Parse(u)
+	if err != nil {
+		return false
 	}
 
-	p := strings.SplitN(u.Path, "/", 4)
+	if !slices.Contains(hostnames, u2.Hostname()) {
+		return false
+	}
+
+	p := strings.SplitN(u2.Path, "/", 4)
 	if len(p) != 4 || p[2] != "status" {
-		return ""
+		return false
 	}
 
-	return p[3]
+	return true
 }
 
-func (x *Provider) GetPost(id string) (*garoo.Post, error) {
+func (x *Provider) GetPost(ctx context.Context, id string) (*garoo.Post, error) {
 	t, err := x.scraper.GetTweet(id)
 	if err != nil {
 		return nil, err

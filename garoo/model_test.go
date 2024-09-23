@@ -9,7 +9,7 @@ import (
 func TestSeedFrom(t *testing.T) {
 	seed1 := SeedFrom("1234567890", "twitter", "hoge category tag1 tag2")
 	assert.Equal(t, Seed{
-		ID:       "1234567890",
+		URL:      "1234567890",
 		Provider: "twitter",
 		Category: "category",
 		Tags:     []string{"tag1", "tag2"},
@@ -17,26 +17,26 @@ func TestSeedFrom(t *testing.T) {
 
 	seed2 := SeedFrom("1234567890", "twitter", "hoge")
 	assert.Equal(t, Seed{
-		ID:       "1234567890",
+		URL:      "1234567890",
 		Provider: "twitter",
 	}, seed2)
 
 	seed3 := SeedFrom("1234567890", "twitter", "hoge -")
 	assert.Equal(t, Seed{
-		ID:       "1234567890",
+		URL:      "1234567890",
 		Provider: "twitter",
 	}, seed3)
 
 	seed4 := SeedFrom("1234567890", "twitter", "hoge - tag1 tag2")
 	assert.Equal(t, Seed{
-		ID:       "1234567890",
+		URL:      "1234567890",
 		Provider: "twitter",
 		Tags:     []string{"tag1", "tag2"},
 	}, seed4)
 
 	seed5 := SeedFrom("1234567890", "twitter", "hoge cat")
 	assert.Equal(t, Seed{
-		ID:       "1234567890",
+		URL:      "1234567890",
 		Provider: "twitter",
 		Category: "cat",
 	}, seed5)

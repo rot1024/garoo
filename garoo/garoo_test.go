@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -39,11 +38,9 @@ func TestGaroo(t *testing.T) {
 	}
 
 	provider := &MockProvider{
-		NameFunc: func() string { return "provider" },
-		ExtractPostIDFunc: func(u *url.URL) string {
-			return "postID"
-		},
-		GetPostFunc: func(id string) (*Post, error) {
+		NameFunc:  func() string { return "provider" },
+		CheckFunc: func(u string) bool { return true },
+		GetPostFunc: func(ctx context.Context, id string) (*Post, error) {
 			return &Post{
 				ID:       "postID",
 				Provider: "provider",
@@ -84,8 +81,8 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
-		"getting post provider=provider id=postID",
+		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		"getting post provider=provider url=https://example.com",
 		"got post id=postID provider=provider",
 		"saving post store=store",
 		"processed seed index=1 total=1 provider=provider",
@@ -93,12 +90,12 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: https://example.com (provider=provider category=aaa tags=bbb)",
 		"✅ DONE!",
 	}, messages)
 
 	// test 2: fail to get post
-	provider.GetPostFunc = func(id string) (*Post, error) {
+	provider.GetPostFunc = func(ctx context.Context, id string) (*Post, error) {
 		return nil, fmt.Errorf("failed to get post")
 	}
 	l.Reset()
@@ -107,14 +104,14 @@ func TestGaroo(t *testing.T) {
 	assert.Equal(t, []string{
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
-		"getting post provider=provider id=postID",
+		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		"getting post provider=provider url=https://example.com",
 		"failed to process seed err=❌ 1/1: failed to get post from provider: failed to get post",
 		"done",
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: https://example.com (provider=provider category=aaa tags=bbb)",
 		"❌ 1/1: failed to get post from provider: failed to get post",
 	}, messages)
 
@@ -122,7 +119,7 @@ func TestGaroo(t *testing.T) {
 	store.SaveFunc = func(p *Post) error {
 		return fmt.Errorf("failed to save post")
 	}
-	provider.GetPostFunc = func(id string) (*Post, error) {
+	provider.GetPostFunc = func(ctx context.Context, id string) (*Post, error) {
 		return &Post{
 			ID:       "postID",
 			Provider: "provider",
@@ -134,8 +131,8 @@ func TestGaroo(t *testing.T) {
 	assert.Equal(t, []string{
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
-		"processing seed index=1 total=1 id=postID provider=provider cat=aaa tags=[bbb]",
-		"getting post provider=provider id=postID",
+		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		"getting post provider=provider url=https://example.com",
 		"got post id=postID provider=provider",
 		"saving post store=store",
 		"failed to process seed err=❌ 1/1: failed to save post to store: failed to save post",
@@ -143,7 +140,7 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: postID (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: https://example.com (provider=provider category=aaa tags=bbb)",
 		"❌ 1/1: failed to save post to store: failed to save post",
 	}, messages)
 }

@@ -7,11 +7,18 @@ type Logger = func(format string, v ...interface{})
 type key struct{}
 
 func logf(ctx context.Context, format string, v ...interface{}) {
-	if logger, ok := ctx.Value(key{}).(Logger); ok {
+	if logger := getLogger(ctx); logger != nil {
 		logger("twitter_scraper: "+format, v...)
 	}
 }
 
 func SetLogger(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, key{}, logger)
+}
+
+func getLogger(ctx context.Context) Logger {
+	if logger, ok := ctx.Value(key{}).(Logger); ok {
+		return logger
+	}
+	return nil
 }

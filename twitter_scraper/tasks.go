@@ -45,7 +45,7 @@ func tasks(id, screename string, post *Post) chromedp.Tasks {
 		// photos
 		chromedp.ActionFunc(getPhotos(&post.Photos)),
 		// videos TODO
-		// getVideos(&post.Videos),
+		getVideos(&post.Videos),
 		// profile
 		getProfile(screename, &post.Autor),
 	}
@@ -76,11 +76,11 @@ func getPhotos(photos *[]string) chromedp.ActionFunc {
 	}
 }
 
-func getVideos(videos *[]string) chromedp.ActionFunc {
+func getVideos(_ *[]string) chromedp.ActionFunc {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		nodes := []*cdp.Node{}
 		if err := getNodesWithTimeout(ctx, `[data-testid=videoPlayer]`, &nodes, time.Second, chromedp.ByQueryAll); err != nil {
-			return fmt.Errorf("could not get photo nodes: %w", err)
+			return fmt.Errorf("could not get video nodes: %w", err)
 		}
 
 		if len(nodes) == 0 {

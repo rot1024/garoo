@@ -22,11 +22,7 @@ func InitChromeDP(ctx context.Context, logger Logger) (context.Context, context.
 
 	ctx = SetLogger(ctx, logger)
 	ctx2, cancel := chromedp.NewExecAllocator(ctx, opts...)
-	ctx3, cancel2 := chromedp.NewContext(ctx2, chromedp.WithLogf(logger))
-	return ctx3, func() {
-		cancel()
-		cancel2()
-	}
+	return ctx2, cancel
 }
 
 func GetPostFromURL(ctx context.Context, url string) (*Post, error) {
@@ -35,17 +31,7 @@ func GetPostFromURL(ctx context.Context, url string) (*Post, error) {
 		return nil, ErrInvalidURL
 	}
 
-	post := &Post{}
-	tasks := tasks(id, screenname, post)
-	if err := chromedp.Run(ctx, tasks); err != nil {
-		return nil, err
-	}
-
-	if !checkPost(post) {
-		return nil, ErrInvalidPost
-	}
-
-	return post, nil
+	return GetPost(ctx, id, screenname)
 }
 
 func GetPost(ctx context.Context, id, screenname string) (*Post, error) {
@@ -53,9 +39,17 @@ func GetPost(ctx context.Context, id, screenname string) (*Post, error) {
 		return nil, ErrInvalidURL
 	}
 
+	opts := []chromedp.ContextOption{}
+	if logger := getLogger(ctx); logger != nil {
+		opts = append(opts, chromedp.WithLogf(logger))
+	}
+
+	ctx2, cancel := chromedp.NewContext(ctx, opts...)
+	defer cancel()
+
 	post := &Post{}
 	tasks := tasks(id, screenname, post)
-	if err := chromedp.Run(ctx, tasks); err != nil {
+	if err := chromedp.Run(ctx2, tasks); err != nil {
 		return nil, err
 	}
 

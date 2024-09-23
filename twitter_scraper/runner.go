@@ -5,12 +5,15 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
 
 var ErrInvalidURL = errors.New("invalid url")
 var ErrInvalidPost = errors.New("invalid post")
+
+const timeout = time.Minute
 
 func InitChromeDP(ctx context.Context, logger Logger) (context.Context, context.CancelFunc) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -47,9 +50,12 @@ func GetPost(ctx context.Context, id, screenname string) (*Post, error) {
 	ctx2, cancel := chromedp.NewContext(ctx, opts...)
 	defer cancel()
 
+	ctx3, cancel := context.WithTimeout(ctx2, timeout)
+	defer cancel()
+
 	post := &Post{}
 	tasks := tasks(id, screenname, post)
-	if err := chromedp.Run(ctx2, tasks); err != nil {
+	if err := chromedp.Run(ctx3, tasks); err != nil {
 		return nil, err
 	}
 

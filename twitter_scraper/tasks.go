@@ -14,8 +14,8 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-func tasks(id, screename string, post *Post) chromedp.Tasks {
-	url := fmt.Sprintf("https://x.com/%s/status/%s", screename, id)
+func tasks(id, screenname string, post *Post) chromedp.Tasks {
+	url := fmt.Sprintf("https://x.com/%s/status/%s", screenname, id)
 
 	return chromedp.Tasks{
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -47,7 +47,7 @@ func tasks(id, screename string, post *Post) chromedp.Tasks {
 		// videos TODO
 		getVideos(&post.Videos),
 		// profile
-		getProfile(screename, &post.Autor),
+		getProfile(screenname, &post.Autor),
 	}
 }
 

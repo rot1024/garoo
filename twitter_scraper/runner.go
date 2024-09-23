@@ -15,6 +15,7 @@ var ErrInvalidPost = errors.New("invalid post")
 func InitChromeDP(ctx context.Context, logger Logger) (context.Context, context.CancelFunc) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.DisableGPU,
+		chromedp.NoSandbox,
 		// https://github.com/microsoft/playwright/blob/0cdc7ee1a3b392d9ab37618e2ee32bc1b929caa3/packages/playwright-core/src/server/deviceDescriptorsSource.json
 		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.6 Safari/537.36"),
 	)

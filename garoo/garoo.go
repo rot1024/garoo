@@ -114,9 +114,8 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 		slog.Info("processing seed", "index", i+1, "total", le, "url", seed.URL, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
 		if err := rec.PostMessage(PostMessageRequest{
 			Message: fmt.Sprintf(
-				"⬇️ %d/%d: %s (provider=%s category=%s tags=%s)", i+1,
+				"⬇️ %d/%d: (provider=%s category=%s tags=%s)", i+1,
 				le,
-				seed.URL,
 				seed.Provider,
 				seed.Category,
 				strings.Join(seed.Tags, ","),

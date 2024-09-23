@@ -125,6 +125,8 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 			slog.Error("failed to post message", "receiver", rec.Name(), "err", err)
 		}
 
+		slog.Info(fmt.Sprintf("got seed: %#v", seed))
+
 		if err := g.processSeed(g.context, seed); err != nil {
 			errors++
 			errmsg := fmt.Sprintf("❌ %d/%d: %v", i+1, le, err)

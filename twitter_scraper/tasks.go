@@ -23,6 +23,10 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 			return nil
 		}),
 		chromedp.Navigate(url),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			logf(ctx, "post: waiting for tweet")
+			return nil
+		}),
 		chromedp.WaitVisible(`[data-testid=tweetText]`, chromedp.ByQuery),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			post.ID = id

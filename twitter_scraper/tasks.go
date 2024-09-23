@@ -3,13 +3,14 @@ package twitter_scraper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
 
@@ -55,7 +56,7 @@ func getPhotos(photos *[]string) chromedp.ActionFunc {
 				continue
 			}
 
-			large, err := largePhotoURL(src)
+			large, err := fixPhotoURL(src)
 			if err != nil {
 				return fmt.Errorf("could not get large photo: %w", err)
 			}
@@ -78,67 +79,56 @@ func getVideos(videos *[]string) chromedp.ActionFunc {
 		}
 
 		logf(ctx, "%d videos", len(nodes))
-		for _, node := range nodes {
-			url, err := waitForVideo(ctx, node)
-			if err != nil {
-				return fmt.Errorf("could not wait for video: %w", err)
-			}
 
-			logf(ctx, "video: %s", url)
-			*videos = append(*videos, url)
-		}
+		// for _, node := range nodes {
+		// 	url, err := waitForVideo(ctx, node)
+		// 	if err != nil {
+		// 		return fmt.Errorf("could not wait for video: %w", err)
+		// 	}
 
-		return nil
+		// 	logf(ctx, "video: %s", url)
+		// 	*videos = append(*videos, url)
+		// }
+
+		// return nil
+
+		return errors.New("video not implemented")
 	})
 }
 
-func waitForVideo(ctx context.Context, node *cdp.Node) (string, error) {
-	ctx2, cancel := context.WithCancel(ctx)
-	defer cancel()
+// func waitForVideo(ctx context.Context, node *cdp.Node) (string, error) {
+// 	ctx2, cancel := context.WithCancel(ctx)
+// 	defer cancel()
 
-	ch := make(chan string)
-	chromedp.ListenTarget(ctx2, func(ev interface{}) {
-		if ev, ok := ev.(*network.EventRequestWillBeSent); ok {
-			url := ev.Request.URL
-			if !strings.Contains(url, "video.twimg.com") {
-				return
-			}
+// 	ch := make(chan string)
+// 	chromedp.ListenTarget(ctx2, func(ev interface{}) {
+// 		if ev, ok := ev.(*network.EventRequestWillBeSent); ok {
+// 			url := ev.Request.URL
+// 			if !strings.Contains(url, "video.twimg.com") {
+// 				return
+// 			}
 
-			go func() {
-				logf(ctx, "req: %s", url)
-				ch <- url
-			}()
-		}
-	})
+// 			go func() {
+// 				logf(ctx, "req: %s", url)
+// 				ch <- url
+// 			}()
+// 		}
+// 	})
 
-	logf(ctx, "click video")
-	if err := chromedp.MouseClickNode(node).Do(ctx); err != nil {
-		return "", fmt.Errorf("could not click video: %w", err)
-	}
+// 	logf(ctx, "click video")
+// 	if err := chromedp.MouseClickNode(node).Do(ctx); err != nil {
+// 		return "", fmt.Errorf("could not click video: %w", err)
+// 	}
 
-	logf(ctx, "waiting for video")
+// 	logf(ctx, "waiting for video")
 
-	select {
-	case <-time.After(10 * time.Second):
-		return "", fmt.Errorf("timeout")
-	case url := <-ch:
-		return url, nil
-	}
-}
-
-func getNodesWithTimeout(ctx context.Context, sel any, nodes *[]*cdp.Node, d time.Duration, opts ...chromedp.QueryOption) error {
-	tctx, cancel := context.WithTimeout(ctx, d)
-	defer cancel()
-
-	// if timeout was exceeded, return nil
-	if err := chromedp.Nodes(sel, nodes, opts...).Do(tctx); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil
-		}
-	}
-
-	return nil
-}
+// 	select {
+// 	case <-time.After(10 * time.Second):
+// 		return "", fmt.Errorf("timeout")
+// 	case url := <-ch:
+// 		return url, nil
+// 	}
+// }
 
 func getProfile(screename string, profile *Profile) chromedp.Tasks {
 	url := fmt.Sprintf("https://x.com/%s", screename)
@@ -180,7 +170,7 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 	}
 }
 
-func largePhotoURL(u string) (string, error) {
+func fixPhotoURL(u string) (string, error) {
 	u2, err := url.Parse(u)
 	if err != nil {
 		return "", fmt.Errorf("could not parse url: %w", err)
@@ -190,6 +180,13 @@ func largePhotoURL(u string) (string, error) {
 	if q.Has("name") {
 		q.Set("name", "large")
 		u2.RawQuery = q.Encode()
+	}
+
+	// notion returns an error if the path does not have an extension
+	if format := q.Get("format"); format != "" {
+		if path.Ext(u2.Path) == "" {
+			u2.Path += "." + format
+		}
 	}
 
 	return u2.String(), nil
@@ -203,3 +200,17 @@ func largePhotoURL(u string) (string, error) {
 // 	logf(ctx, "HTML: %s", html)
 // 	return nil
 // }
+
+func getNodesWithTimeout(ctx context.Context, sel any, nodes *[]*cdp.Node, d time.Duration, opts ...chromedp.QueryOption) error {
+	tctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+
+	// if timeout was exceeded, return nil
+	if err := chromedp.Nodes(sel, nodes, opts...).Do(tctx); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil
+		}
+	}
+
+	return nil
+}

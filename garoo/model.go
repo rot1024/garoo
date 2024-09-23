@@ -70,7 +70,6 @@ const (
 )
 
 type Media struct {
-	ID   string    `json:"id"`
 	Type MediaType `json:"type"`
 	URL  string    `json:"url"`
 }

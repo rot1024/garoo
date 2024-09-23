@@ -76,7 +76,6 @@ func (x *Provider) SetConfig(c string) {}
 
 func photoToMedia(url string, _ int) garoo.Media {
 	return garoo.Media{
-		ID:   url,
 		Type: garoo.MediaTypePhoto,
 		URL:  url,
 	}
@@ -84,7 +83,6 @@ func photoToMedia(url string, _ int) garoo.Media {
 
 func photoToVideo(url string, _ int) garoo.Media {
 	return garoo.Media{
-		ID:   url,
 		Type: garoo.MediaTypeVideo,
 		URL:  url,
 	}

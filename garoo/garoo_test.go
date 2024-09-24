@@ -22,6 +22,17 @@ func TestGaroo(t *testing.T) {
 		slog.SetDefault(dlog)
 	})
 
+	post := &Post{
+		ID:       "postID",
+		Provider: "provider",
+	}
+	seed := Seed{
+		URL:      "https://example.com",
+		Provider: "provider",
+		Category: "aaa",
+		Tags:     []string{"bbb"},
+	}
+
 	receiver := &MockReceiver{
 		NameFunc:  func() string { return "receiver" },
 		StartFunc: func() error { return nil },
@@ -41,10 +52,7 @@ func TestGaroo(t *testing.T) {
 		NameFunc:  func() string { return "provider" },
 		CheckFunc: func(u string) bool { return true },
 		GetPostFunc: func(ctx context.Context, id string) (*Post, error) {
-			return &Post{
-				ID:       "postID",
-				Provider: "provider",
-			}, nil
+			return post, nil
 		},
 		InitFunc:      func(string) error { return nil },
 		GetConfigFunc: func() string { return "" },
@@ -82,8 +90,9 @@ func TestGaroo(t *testing.T) {
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
 		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		fmt.Sprintf("got seed: %#v", seed),
 		"getting post provider=provider url=https://example.com",
-		"got post id=postID provider=provider",
+		fmt.Sprintf("got post: %#v", post),
 		"saving post store=store",
 		"processed seed index=1 total=1 provider=provider",
 		"done",
@@ -105,6 +114,7 @@ func TestGaroo(t *testing.T) {
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
 		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		fmt.Sprintf("got seed: %#v", seed),
 		"getting post provider=provider url=https://example.com",
 		"failed to process seed err=❌ 1/1: failed to get post from provider: failed to get post",
 		"done",
@@ -132,8 +142,9 @@ func TestGaroo(t *testing.T) {
 		"received message receiver=receiver msg=https://example.com aaa bbb",
 		"found seed(s) count=1",
 		"processing seed index=1 total=1 url=https://example.com provider=provider cat=aaa tags=[bbb]",
+		fmt.Sprintf("got seed: %#v", seed),
 		"getting post provider=provider url=https://example.com",
-		"got post id=postID provider=provider",
+		fmt.Sprintf("got post: %#v", post),
 		"saving post store=store",
 		"failed to process seed err=❌ 1/1: failed to save post to store: failed to save post",
 		"done",

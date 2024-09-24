@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -36,11 +37,7 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		// text
 		chromedp.AttributeValue(`meta[property="og:title"]`, "content", &post.Text, nil, chromedp.ByQuery),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			if strings.HasSuffix(post.Text, " / X") {
-				post.Text = strings.TrimSuffix(post.Text, " / X")
-			} else {
-				post.Text = strings.TrimSuffix(post.Text, " / Twitter")
-			}
+			post.Text = formatOGTitle(post.Text)
 			return nil
 		}),
 		// chromedp.TextContent(`[data-testid=tweetText]`, &post.Text, chromedp.ByQuery),
@@ -53,6 +50,23 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		// profile
 		getProfile(screenname, &post.Autor),
 	}
+}
+
+var reTitle = regexp.MustCompile(`(?s)^.*さん: 「(.*)」$`)
+
+func formatOGTitle(title string) string {
+	if strings.HasSuffix(title, " / X") {
+		title = strings.TrimSuffix(title, " / X")
+	} else {
+		title = strings.TrimSuffix(title, " / Twitter")
+	}
+
+	m := reTitle.FindStringSubmatch(title)
+	if len(m) == 2 {
+		return m[1]
+	}
+
+	return title
 }
 
 func getPhotos(photos *[]string) chromedp.ActionFunc {

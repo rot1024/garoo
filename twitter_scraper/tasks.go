@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -50,23 +47,6 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		// profile
 		getProfile(screenname, &post.Autor),
 	}
-}
-
-var reTitle = regexp.MustCompile(`(?s)^.*さん: 「(.*)」$`)
-
-func formatOGTitle(title string) string {
-	if strings.HasSuffix(title, " / X") {
-		title = strings.TrimSuffix(title, " / X")
-	} else {
-		title = strings.TrimSuffix(title, " / Twitter")
-	}
-
-	m := reTitle.FindStringSubmatch(title)
-	if len(m) == 2 {
-		return m[1]
-	}
-
-	return title
 }
 
 func getPhotos(photos *[]string) chromedp.ActionFunc {
@@ -195,24 +175,6 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 			return nil
 		}),
 	}
-}
-
-func fixPhotoURL(u string) (string, error) {
-	u2, err := url.Parse(u)
-	if err != nil {
-		return "", fmt.Errorf("could not parse url: %w", err)
-	}
-
-	q := u2.Query()
-	// notion returns an error if the path does not have an extension
-	if format := q.Get("format"); format != "" {
-		if path.Ext(u2.Path) == "" {
-			u2.Path += "." + format
-		}
-	}
-
-	u2.RawQuery = ""
-	return u2.String(), nil
 }
 
 // func logHTML(ctx context.Context) error {

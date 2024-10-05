@@ -12,6 +12,9 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+const shortTimeout = time.Millisecond * 500
+const longTimeout = time.Second
+
 func tasks(id, screenname string, post *Post) chromedp.Tasks {
 	url := fmt.Sprintf("https://x.com/%s/status/%s", screenname, id)
 
@@ -39,7 +42,7 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		}),
 		// chromedp.TextContent(`[data-testid=tweetText]`, &post.Text, chromedp.ByQuery),
 		// time
-		chromedp.AttributeValue(`time`, "datetime", &post.Time, nil, chromedp.ByQuery),
+		chromedp.ActionFunc(getTime(&post.Time)),
 		// photos
 		chromedp.ActionFunc(getPhotos(&post.Photos, screenname)),
 		// videos TODO
@@ -49,12 +52,39 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 	}
 }
 
+func getTime(res *string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		// get first article
+		nodes := []*cdp.Node{}
+		if err := getNodesWithTimeout(ctx, `[data-testid=tweet]`, &nodes, shortTimeout, chromedp.ByQuery); err != nil {
+			return fmt.Errorf("time: could not get article nodes: %w", err)
+		}
+
+		if len(nodes) == 0 {
+			return errors.New("time: no article nodes")
+		}
+
+		// get last time
+		nodes2 := []*cdp.Node{}
+		if err := getNodesWithTimeout(ctx, `time`, &nodes2, shortTimeout, chromedp.ByQueryAll, chromedp.FromNode(nodes[0])); err != nil {
+			return fmt.Errorf("time: could not get time nodes: %w", err)
+		}
+
+		if len(nodes2) == 0 {
+			return errors.New("time: no time nodes")
+		}
+
+		*res = nodes2[len(nodes2)-1].AttributeValue("datetime")
+		return nil
+	}
+}
+
 func getPhotos(photos *[]string, screenname string) chromedp.ActionFunc {
 	return func(ctx context.Context) error {
 		var nodes []*cdp.Node
 
 		// check if this tweet is quoted
-		if err := getNodesWithTimeout(ctx, `a:has([data-testid=tweetPhoto] img)`, &nodes, time.Millisecond*500, chromedp.ByQuery); err != nil {
+		if err := getNodesWithTimeout(ctx, `a:has([data-testid=tweetPhoto] img)`, &nodes, shortTimeout, chromedp.ByQuery); err != nil {
 			return fmt.Errorf("could not get quoted tweet nodes: %w", err)
 		}
 
@@ -81,7 +111,7 @@ func getPhotos(photos *[]string, screenname string) chromedp.ActionFunc {
 		}
 
 		nodes = nil
-		if err := getNodesWithTimeout(ctx, `[data-testid=tweetPhoto] img`, &nodes, time.Second, chromedp.ByQueryAll); err != nil {
+		if err := getNodesWithTimeout(ctx, `[data-testid=tweetPhoto] img`, &nodes, longTimeout, chromedp.ByQueryAll); err != nil {
 			return fmt.Errorf("could not get photo nodes: %w", err)
 		}
 
@@ -105,7 +135,7 @@ func getPhotos(photos *[]string, screenname string) chromedp.ActionFunc {
 func getVideos(_ *[]string) chromedp.ActionFunc {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		nodes := []*cdp.Node{}
-		if err := getNodesWithTimeout(ctx, `[data-testid=videoPlayer]`, &nodes, time.Second, chromedp.ByQueryAll); err != nil {
+		if err := getNodesWithTimeout(ctx, `[data-testid=videoPlayer]`, &nodes, longTimeout, chromedp.ByQueryAll); err != nil {
 			return fmt.Errorf("could not get video nodes: %w", err)
 		}
 

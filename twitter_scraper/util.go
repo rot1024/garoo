@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+// /hogehoge/status/~ -> hogehoge
+func getScreennameFromPath(p string) string {
+	c, _, ok := strings.Cut(p, "/status/")
+	if !ok {
+		return ""
+	}
+	return strings.TrimPrefix(c, "/")
+}
+
 func fixPhotoURL(u string) (string, error) {
 	u2, err := url.Parse(u)
 	if err != nil {

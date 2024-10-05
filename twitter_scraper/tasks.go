@@ -41,7 +41,7 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		// time
 		chromedp.AttributeValue(`time`, "datetime", &post.Time, nil, chromedp.ByQuery),
 		// photos
-		chromedp.ActionFunc(getPhotos(&post.Photos)),
+		chromedp.ActionFunc(getPhotos(&post.Photos, screenname)),
 		// videos TODO
 		getVideos(&post.Videos),
 		// profile
@@ -49,10 +49,38 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 	}
 }
 
-func getPhotos(photos *[]string) chromedp.ActionFunc {
+func getPhotos(photos *[]string, screenname string) chromedp.ActionFunc {
 	return func(ctx context.Context) error {
 		var nodes []*cdp.Node
 
+		// check if this tweet is quoted
+		if err := getNodesWithTimeout(ctx, `a:has([data-testid=tweetPhoto] img)`, &nodes, time.Millisecond*500, chromedp.ByQuery); err != nil {
+			return fmt.Errorf("could not get quoted tweet nodes: %w", err)
+		}
+
+		if len(nodes) > 0 {
+			href := nodes[0].AttributeValue("href")
+			if !strings.Contains(href, "/photo/") {
+				// invalid link
+				logf(ctx, "invalid quoted tweet link: %s", href)
+				return nil
+			}
+
+			author := getScreennameFromPath(href)
+			if author == "" {
+				// invalid link
+				logf(ctx, "invalid quoted tweet link: %s", href)
+				return nil
+			}
+
+			if author != screenname {
+				// quanted tweet
+				logf(ctx, "quoted tweet: %s != %s", author, screenname)
+				return nil
+			}
+		}
+
+		nodes = nil
 		if err := getNodesWithTimeout(ctx, `[data-testid=tweetPhoto] img`, &nodes, time.Second, chromedp.ByQueryAll); err != nil {
 			return fmt.Errorf("could not get photo nodes: %w", err)
 		}

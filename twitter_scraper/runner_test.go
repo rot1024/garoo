@@ -9,8 +9,8 @@ import (
 
 func TestRun(t *testing.T) {
 	t.SkipNow()
-	id := ""
 	screenname := ""
+	id := ""
 
 	ctx, cancel := InitChromeDP(context.Background(), t.Logf)
 	defer cancel()

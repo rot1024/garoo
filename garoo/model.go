@@ -53,6 +53,14 @@ type Post struct {
 	Tags      []string  `json:"tags,omitempty"`
 }
 
+func (post *Post) IsText() bool {
+	return post.Category == TextCategory
+}
+
+func (post *Post) IsSpecialCategory() bool {
+	return post.Category == "" || post.Category == "-" || post.Category == TextCategory
+}
+
 type Author struct {
 	ID          string `json:"id"`
 	ScreenName  string `json:"screen_name"`

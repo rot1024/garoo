@@ -99,7 +99,7 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: (provider=provider category=`aaa` tags=`bbb`)",
 		"✅ DONE!",
 	}, messages)
 
@@ -121,7 +121,7 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: (provider=provider category=`aaa` tags=`bbb`)",
 		"❌ 1/1: failed to get post from provider: failed to get post",
 	}, messages)
 
@@ -151,7 +151,7 @@ func TestGaroo(t *testing.T) {
 		"saved config",
 	}, l.Logs())
 	assert.Equal(t, []string{
-		"⬇️ 1/1: (provider=provider category=aaa tags=bbb)",
+		"⬇️ 1/1: (provider=provider category=`aaa` tags=`bbb`)",
 		"❌ 1/1: failed to save post to store: failed to save post",
 	}, messages)
 }

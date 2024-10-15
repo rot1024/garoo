@@ -103,7 +103,7 @@ func getPhotos(photos *[]string, screenname string) chromedp.ActionFunc {
 				return nil
 			}
 
-			if author != screenname {
+			if !strings.EqualFold(author, screenname) {
 				// quanted tweet
 				logf(ctx, "quoted tweet: %s != %s", author, screenname)
 				return nil

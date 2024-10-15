@@ -122,7 +122,7 @@ func postProperties(p *garoo.Post, i int, authorPageID *notionapi.PageID) notion
 		},
 	}
 
-	if p.Category != "" && p.Category != "-" && p.Category != textCategory {
+	if !p.IsSpecialCategory() {
 		properties[propertyPostCategory] = notionapi.SelectProperty{
 			Type: notionapi.PropertyTypeSelect,
 			Select: notionapi.Option{

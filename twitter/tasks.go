@@ -208,7 +208,7 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 	rawJSON := ""
 
 	type profileJSON struct {
-		Author struct {
+		MainEntity struct {
 			Identifier     string `json:"identifier"`
 			GivenName      string `json:"givenName"`
 			AdditionalName string `json:"additionalName"`
@@ -216,7 +216,7 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 			Image          struct {
 				ContentURL string `json:"contentUrl"`
 			} `json:"image"`
-		} `json:"author"`
+		} `json:"mainEntity"`
 	}
 
 	return chromedp.Tasks{
@@ -235,10 +235,13 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 
 			profile.URL = url
 			profile.Screename = screename
-			profile.Name = p.Author.GivenName
+			profile.Name = p.MainEntity.GivenName
 			if profile.Name == "" {
-				profile.Name = p.Author.AdditionalName
+				profile.Name = p.MainEntity.AdditionalName
 			}
+			profile.ID = p.MainEntity.Identifier
+			profile.Avator = p.MainEntity.Image.ContentURL
+			profile.Description = p.MainEntity.Description
 
 			// check
 			if profile.ID == "" || profile.Name == "" || profile.Screename == "" || profile.URL == "" {

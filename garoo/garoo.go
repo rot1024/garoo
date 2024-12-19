@@ -114,13 +114,24 @@ func (g *Garoo) handler(msg *Message, rec Receiver) {
 	var errors int
 	for i, seed := range seeds {
 		slog.Info("processing seed", "index", i+1, "total", le, "url", seed.URL, "provider", seed.Provider, "cat", seed.Category, "tags", seed.Tags)
+
+		category := seed.Category
+		if category != "" {
+			category = fmt.Sprintf("`%s`", category)
+		}
+
+		tags := strings.Join(seed.Tags, ",")
+		if tags != "" {
+			tags = fmt.Sprintf("`%s`", tags)
+		}
+
 		if err := rec.PostMessage(PostMessageRequest{
 			Message: fmt.Sprintf(
-				"⬇️ %d/%d: (provider=%s category=`%s` tags=`%s`)", i+1,
+				"⬇️ %d/%d: (provider=%s category=%s tags=%s)", i+1,
 				le,
 				seed.Provider,
-				seed.Category,
-				strings.Join(seed.Tags, ","),
+				category,
+				tags,
 			),
 			ReplyToMessage: msg.ID,
 		}); err != nil {

@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/rot1024/garoo/garoo"
-	"github.com/rot1024/garoo/twitter_scraper"
+	"github.com/rot1024/garoo/twitter"
 	"github.com/samber/lo"
 )
 
@@ -64,7 +64,7 @@ func main2() error {
 	}))
 
 	// init context
-	ctx, cancel := twitter_scraper.InitChromeDP(context.Background(), infof)
+	ctx, cancel := twitter.InitChromeDP(context.Background(), infof)
 	defer cancel()
 
 	g := garoo.New(garoo.Options{

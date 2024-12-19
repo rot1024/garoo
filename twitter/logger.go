@@ -1,4 +1,4 @@
-package twitter_scraper
+package twitter
 
 import "context"
 

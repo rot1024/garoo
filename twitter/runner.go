@@ -59,15 +59,7 @@ func GetPost(ctx context.Context, id, screenname string) (*Post, error) {
 		return nil, err
 	}
 
-	if !checkPost(post) {
-		return nil, ErrInvalidPost
-	}
-
 	return post, nil
-}
-
-func checkPost(p *Post) bool {
-	return p.URL != "" && p.ID != "" && p.Time != "" && p.Autor.ID != "" && p.Autor.Name != "" && p.Autor.Screename != "" && p.Autor.URL != ""
 }
 
 func getIDAndScreenNameFromURL(u string) (string, string) {

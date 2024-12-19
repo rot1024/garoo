@@ -47,6 +47,14 @@ func tasks(id, screenname string, post *Post) chromedp.Tasks {
 		chromedp.ActionFunc(getPhotos(&post.Photos, screenname)),
 		// videos TODO
 		getVideos(&post.Videos),
+		// check
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if post.ID == "" || post.URL == "" || post.Time == "" {
+				getLogger(ctx)("twitter: some info are missing: post=%#v", post)
+				return ErrInvalidPost
+			}
+			return nil
+		}),
 		// profile
 		getProfile(screenname, &post.Autor),
 	}
@@ -231,9 +239,13 @@ func getProfile(screename string, profile *Profile) chromedp.Tasks {
 			if profile.Name == "" {
 				profile.Name = p.Author.AdditionalName
 			}
-			profile.ID = p.Author.Identifier
-			profile.Avator = p.Author.Image.ContentURL
-			profile.Description = p.Author.Description
+
+			// check
+			if profile.ID == "" || profile.Name == "" || profile.Screename == "" || profile.URL == "" {
+				getLogger(ctx)("twitter: some info are missing: profile=%#v, json=%s", profile, rawJSON)
+				return ErrInvalidPost
+			}
+
 			return nil
 		}),
 	}

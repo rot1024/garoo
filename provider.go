@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rot1024/garoo/garoo"
-	"github.com/rot1024/garoo/twitter_scraper"
+	"github.com/rot1024/garoo/twitter"
 )
 
 var providers = map[string]func(*Config) (garoo.Provider, error){
@@ -26,6 +26,5 @@ func initProviders(conf *Config) (res []garoo.Provider, _ error) {
 }
 
 func initTwitter(conf *Config) (garoo.Provider, error) {
-	return twitter_scraper.New()
-	// return twitter.New(conf.Twitter.User, conf.Twitter.Password, conf.Twitter.Email)
+	return twitter.New()
 }

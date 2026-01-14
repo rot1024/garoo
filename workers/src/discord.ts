@@ -1,24 +1,72 @@
 import type { Seed } from "./types";
 
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+
+export interface DiscordMessage {
+  id: string;
+  content: string;
+  author: {
+    id: string;
+    username: string;
+    bot?: boolean;
+  };
+  timestamp: string;
+}
+
 /**
- * Send a notification to Discord via webhook
+ * Fetch messages from a Discord channel
+ * @param after - Only fetch messages after this message ID (Snowflake)
  */
-export async function sendNotification(
-  webhookUrl: string,
-  message: string
-): Promise<void> {
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      content: message,
-    }),
-  });
+export async function fetchMessages(
+  botToken: string,
+  channelId: string,
+  after?: string
+): Promise<DiscordMessage[]> {
+  const params = new URLSearchParams({ limit: "100" });
+  if (after) {
+    params.set("after", after);
+  }
+
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages?${params}`,
+    {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+    }
+  );
 
   if (!response.ok) {
-    throw new Error(`Discord webhook failed: ${response.status}`);
+    throw new Error(`Discord API failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Send a message to Discord channel via Bot API
+ */
+export async function sendMessage(
+  botToken: string,
+  channelId: string,
+  message: string
+): Promise<void> {
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: message,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Discord API failed: ${response.status}`);
   }
 }
 

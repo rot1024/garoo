@@ -37,7 +37,9 @@ export interface Seed {
 
 export interface Env {
   BROWSER: Fetcher;
-  DISCORD_WEBHOOK_URL?: string;
+  KV: KVNamespace;
+  DISCORD_BOT_TOKEN?: string;
+  DISCORD_CHANNEL_ID?: string;
 }
 
 export interface WebhookPayload {

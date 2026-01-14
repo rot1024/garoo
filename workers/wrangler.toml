@@ -5,3 +5,12 @@ compatibility_flags = ["nodejs_compat"]
 
 # Browser Rendering API binding
 browser = { binding = "BROWSER" }
+
+# KV namespace for storing state
+kv_namespaces = [
+  { binding = "KV", id = "66a7ac6bd06249ffbc707f632eae4f34" }
+]
+
+# Cron trigger (every 3 minutes)
+[triggers]
+crons = ["*/3 * * * *"]

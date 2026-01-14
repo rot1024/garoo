@@ -1,0 +1,20 @@
+{
+  "name": "garoo-workers-poc",
+  "version": "0.0.1",
+  "description": "POC for Cloudflare Workers with Browser Rendering API for X scraping",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.59.1"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^0.0.15"
+  }
+}

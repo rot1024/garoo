@@ -1,12 +1,13 @@
 {
-  "name": "garoo-workers-poc",
-  "version": "0.0.1",
-  "description": "POC for Cloudflare Workers with Browser Rendering API for X scraping",
+  "name": "garoo",
+  "version": "0.1.0",
+  "description": "Garoo - Social media post scraper on Cloudflare Workers",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
     "types": "wrangler types"
   },
   "devDependencies": {

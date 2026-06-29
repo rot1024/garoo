@@ -43,6 +43,15 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
     limit
   );
 
+  // Process the page's files concurrently — this is I/O-bound (Dropbox download
+  // + R2 put per file), so parallelism is a large speedup. Subrequest count is
+  // unchanged (limit keeps it within budget); only wall time drops.
+  const outcomes = await Promise.all(
+    files.map((path) =>
+      processFile(path, env.R2!, dropbox, d1, base, basePrefix, dry)
+    )
+  );
+
   let imported = 0;
   let existing = 0;
   let orphans = 0;
@@ -54,63 +63,32 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
   const nonTwitterList: string[] = [];
   const failedList: Array<{ path: string; error: string }> = [];
 
-  for (const path of files) {
-    // A twitter file is identified by its "<screenname>_<tweetid>" filename,
-    // regardless of which folder it sits in (e.g. /garo/unsaved/...). pixiv and
-    // other providers don't match and are skipped.
-    const filename = path.split("/").filter((s) => s.length > 0).pop() ?? "";
-    const m = FILENAME_RE.exec(filename);
-    if (!m) {
-      nonTwitter++;
-      if (nonTwitterList.length < 10) nonTwitterList.push(path);
-      continue;
+  for (const o of outcomes) {
+    if (o.misplaced) {
+      misplaced++;
+      if (misplacedList.length < 50)
+        misplacedList.push({ path: o.path, target: o.misplaced });
     }
-    const screenname = m[1];
-    const id = m[2];
-
-    try {
-      const d1cat = await d1.getCategory(id, PROVIDER);
-      if (d1cat === null) {
-        orphans++;
-        orphanList.push(path);
-        continue;
-      }
-      const category = d1cat.length > 0 ? d1cat : DEFAULT_CATEGORY;
-
-      // R2 key — D1 category is authoritative; always author-separated.
-      const key = [base, PROVIDER, category, screenname, filename].join("/");
-
-      // Misplaced = not under the correct *category* folder in Dropbox (e.g.
-      // it's in /garo/unsaved/ or an old category). Author-subdir vs
-      // category-root doesn't matter. Recorded for a later Dropbox reconcile.
-      const correctPrefix = `${basePrefix}/${PROVIDER}/${category.toLowerCase()}/`;
-      if (!path.toLowerCase().startsWith(correctPrefix)) {
-        misplaced++;
-        if (misplacedList.length < 50) {
-          misplacedList.push({
-            path,
-            target: `/${[base, PROVIDER, category, filename].join("/")}`,
-          });
-        }
-      }
-
-      if (await env.R2.head(key)) {
+    switch (o.status) {
+      case "imported":
+        imported++;
+        break;
+      case "existing":
         existing++;
-        continue;
-      }
-      if (dry) continue;
-
-      const data = await dropbox.downloadFile(path);
-      await env.R2.put(key, data, {
-        httpMetadata: { contentType: contentType(filename) },
-      });
-      imported++;
-    } catch (e) {
-      // One bad file shouldn't fail the whole page; record and continue.
-      failed++;
-      if (failedList.length < 10) {
-        failedList.push({ path, error: e instanceof Error ? e.message : String(e) });
-      }
+        break;
+      case "orphan":
+        orphans++;
+        orphanList.push(o.path);
+        break;
+      case "nonTwitter":
+        nonTwitter++;
+        if (nonTwitterList.length < 10) nonTwitterList.push(o.path);
+        break;
+      case "failed":
+        failed++;
+        if (failedList.length < 10)
+          failedList.push({ path: o.path, error: o.error ?? "" });
+        break;
     }
   }
 
@@ -131,6 +109,62 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
     nonTwitterList,
     failedList,
   });
+}
+
+interface FileOutcome {
+  status: "imported" | "existing" | "orphan" | "nonTwitter" | "failed";
+  path: string;
+  misplaced?: string; // canonical target path, if the file is mis-categorized
+  error?: string;
+}
+
+async function processFile(
+  path: string,
+  bucket: R2Bucket,
+  dropbox: DropboxStore,
+  d1: D1Store,
+  base: string,
+  basePrefix: string,
+  dry: boolean
+): Promise<FileOutcome> {
+  // A twitter file is identified by its "<screenname>_<tweetid>" filename,
+  // regardless of folder (e.g. /garo/unsaved/...). pixiv etc. don't match.
+  const filename = path.split("/").filter((s) => s.length > 0).pop() ?? "";
+  const m = FILENAME_RE.exec(filename);
+  if (!m) return { status: "nonTwitter", path };
+  const screenname = m[1];
+  const id = m[2];
+
+  try {
+    const d1cat = await d1.getCategory(id, PROVIDER);
+    if (d1cat === null) return { status: "orphan", path };
+    const category = d1cat.length > 0 ? d1cat : DEFAULT_CATEGORY;
+
+    // R2 key — D1 category is authoritative; always author-separated.
+    const key = [base, PROVIDER, category, screenname, filename].join("/");
+
+    // Misplaced = not under the correct category folder in Dropbox (author
+    // subdir vs category-root doesn't matter). Recorded for later reconcile.
+    const correctPrefix = `${basePrefix}/${PROVIDER}/${category.toLowerCase()}/`;
+    const misplaced = path.toLowerCase().startsWith(correctPrefix)
+      ? undefined
+      : `/${[base, PROVIDER, category, filename].join("/")}`;
+
+    if (await bucket.head(key)) return { status: "existing", path, misplaced };
+    if (dry) return { status: "imported", path, misplaced }; // would import
+
+    const data = await dropbox.downloadFile(path);
+    await bucket.put(key, data, {
+      httpMetadata: { contentType: contentType(filename) },
+    });
+    return { status: "imported", path, misplaced };
+  } catch (e) {
+    return {
+      status: "failed",
+      path,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 function contentType(name: string): string | undefined {

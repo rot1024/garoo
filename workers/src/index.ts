@@ -1,4 +1,4 @@
-import type { Env, WebhookPayload, Post } from "./types";
+import type { Env, WebhookPayload, Post, Seed } from "./types";
 import { extractSeeds } from "./seed";
 import {
   fetchMessages,
@@ -8,6 +8,7 @@ import {
   formatError,
 } from "./discord";
 import * as x from "./providers/x";
+import { buildStores, backupD1ToDropbox, type Store } from "./stores";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
@@ -71,8 +72,10 @@ async function pollDiscord(env: Env): Promise<PollResult> {
 
   // Messages are returned newest first, so reverse for chronological processing
   const sortedMessages = [...messages].reverse();
+  const stores = buildStores(env);
 
   let processed = 0;
+  let saved = 0;
   for (const message of sortedMessages) {
     // Skip bot messages
     if (message.author.bot) continue;
@@ -81,14 +84,23 @@ async function pollDiscord(env: Env): Promise<PollResult> {
     const seeds = extractSeeds(message.content);
     if (seeds.length === 0) continue;
 
-    // Process seeds
-    await processSeeds(seeds, env);
+    const results = await processSeeds(seeds, env, stores);
+    saved += results.filter((r) => r.post).length;
     processed++;
   }
 
   // Save the newest message ID
   const newestMessageId = messages[0].id;
   await env.KV.put(KV_LAST_MESSAGE_ID, newestMessageId);
+
+  // Back up D1 to Dropbox when at least one post was saved this cycle.
+  if (saved > 0) {
+    try {
+      await backupD1ToDropbox(env);
+    } catch (e) {
+      console.error("D1 backup to Dropbox failed:", e);
+    }
+  }
 
   return {
     status: "ok",
@@ -98,65 +110,81 @@ async function pollDiscord(env: Env): Promise<PollResult> {
   };
 }
 
-async function processSeeds(seeds: ReturnType<typeof extractSeeds>, env: Env): Promise<void> {
-  const canNotify = env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID;
+interface SeedResult {
+  seed: Seed;
+  post?: Post;
+  error?: string;
+}
+
+/**
+ * Fetch each seed's post and save it to every configured store, sending
+ * Discord progress/error/completion notifications along the way.
+ * Shared by both the webhook and the scheduled Discord poll.
+ */
+async function processSeeds(
+  seeds: Seed[],
+  env: Env,
+  stores: Store[]
+): Promise<SeedResult[]> {
+  const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
+  const results: SeedResult[] = [];
 
   for (let i = 0; i < seeds.length; i++) {
     const seed = seeds[i];
     const index = i + 1;
     const total = seeds.length;
 
-    // Send progress notification
-    if (canNotify) {
-      try {
-        await sendMessage(
-          env.DISCORD_BOT_TOKEN!,
-          env.DISCORD_CHANNEL_ID!,
-          formatProgress(index, total, seed)
-        );
-      } catch (e) {
-        console.error("Failed to send progress notification:", e);
-      }
-    }
+    await notify(env, canNotify, formatProgress(index, total, seed));
 
     try {
-      // Get post from provider
-      let post: Post;
-      if (seed.provider === "twitter") {
-        post = await x.getPost(env.BROWSER, seed.url);
-      } else {
-        throw new Error(`Unknown provider: ${seed.provider}`);
-      }
+      const post = await getPostForSeed(seed, env);
 
       // Attach category and tags
       post.category = seed.category;
       post.tags = seed.tags?.length ? seed.tags : undefined;
 
-      // TODO: Save to store (Phase 2)
-      console.log("Processed post:", post.id);
-    } catch (error) {
-      // Send error notification
-      if (canNotify) {
-        try {
-          await sendMessage(
-            env.DISCORD_BOT_TOKEN!,
-            env.DISCORD_CHANNEL_ID!,
-            formatError(index, total, error as Error)
-          );
-        } catch (e) {
-          console.error("Failed to send error notification:", e);
-        }
+      // Save to every configured store (D1 / Dropbox / Notion)
+      for (const store of stores) {
+        await store.save(post);
       }
+
+      results.push({ seed, post });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      results.push({ seed, error: message });
+      // Mention the owner on errors (parity with Go's MentionToUser).
+      const mention = env.DISCORD_USER_ID ? `<@${env.DISCORD_USER_ID}> ` : "";
+      await notify(
+        env,
+        canNotify,
+        mention + formatError(index, total, error as Error)
+      );
     }
   }
 
   // Send completion notification
-  if (canNotify) {
-    try {
-      await sendMessage(env.DISCORD_BOT_TOKEN!, env.DISCORD_CHANNEL_ID!, formatSuccess());
-    } catch (e) {
-      console.error("Failed to send success notification:", e);
-    }
+  await notify(env, canNotify, formatSuccess());
+
+  return results;
+}
+
+async function getPostForSeed(seed: Seed, env: Env): Promise<Post> {
+  if (seed.provider === "twitter") {
+    return x.getPost(env.TWITTERAPI_IO_KEY ?? "", seed.url);
+  }
+  throw new Error(`Unknown provider: ${seed.provider}`);
+}
+
+async function notify(
+  env: Env,
+  canNotify: boolean,
+  message: string
+): Promise<void> {
+  if (!canNotify) return;
+  try {
+    await sendMessage(env.DISCORD_BOT_TOKEN!, env.DISCORD_CHANNEL_ID!, message);
+  } catch (e) {
+    console.error("Failed to send notification:", e);
   }
 }
 
@@ -179,73 +207,8 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
     return Response.json({ status: "no_seeds", message: "No valid URLs found" });
   }
 
-  const canNotify = env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID;
-  const results: Array<{ seed: typeof seeds[0]; post?: Post; error?: string }> =
-    [];
-
-  // Process each seed
-  for (let i = 0; i < seeds.length; i++) {
-    const seed = seeds[i];
-    const index = i + 1;
-    const total = seeds.length;
-
-    // Send progress notification
-    if (canNotify) {
-      try {
-        await sendMessage(
-          env.DISCORD_BOT_TOKEN!,
-          env.DISCORD_CHANNEL_ID!,
-          formatProgress(index, total, seed)
-        );
-      } catch (e) {
-        console.error("Failed to send progress notification:", e);
-      }
-    }
-
-    try {
-      // Get post from provider
-      let post: Post;
-      if (seed.provider === "twitter") {
-        post = await x.getPost(env.BROWSER, seed.url);
-      } else {
-        throw new Error(`Unknown provider: ${seed.provider}`);
-      }
-
-      // Attach category and tags
-      post.category = seed.category;
-      post.tags = seed.tags?.length ? seed.tags : undefined;
-
-      results.push({ seed, post });
-
-      // TODO: Save to store (Phase 2)
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
-      results.push({ seed, error: message });
-
-      // Send error notification
-      if (canNotify) {
-        try {
-          await sendMessage(
-            env.DISCORD_BOT_TOKEN!,
-            env.DISCORD_CHANNEL_ID!,
-            formatError(index, total, error as Error)
-          );
-        } catch (e) {
-          console.error("Failed to send error notification:", e);
-        }
-      }
-    }
-  }
-
-  // Send completion notification
-  if (canNotify) {
-    try {
-      await sendMessage(env.DISCORD_BOT_TOKEN!, env.DISCORD_CHANNEL_ID!, formatSuccess());
-    } catch (e) {
-      console.error("Failed to send success notification:", e);
-    }
-  }
+  const stores = buildStores(env);
+  const results = await processSeeds(seeds, env, stores);
 
   return Response.json({
     status: "ok",

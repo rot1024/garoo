@@ -1,19 +1,40 @@
-import puppeteer, { Browser } from "@cloudflare/puppeteer";
 import type { Post, Author, Media } from "../types";
 
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.6 Safari/537.36";
+const API_BASE = "https://api.twitterapi.io";
 
-interface ProfileJSON {
-  mainEntity?: {
-    identifier?: string;
-    givenName?: string;
-    additionalName?: string;
-    description?: string;
-    image?: {
-      contentUrl?: string;
-    };
-  };
+interface TwitterApiResponse {
+  tweets?: Tweet[];
+  status?: string;
+  msg?: string;
+}
+
+interface Tweet {
+  id: string;
+  url?: string;
+  text?: string;
+  createdAt?: string;
+  author?: TweetAuthor;
+  extendedEntities?: { media?: MediaItem[] };
+}
+
+interface TweetAuthor {
+  id?: string;
+  userName?: string;
+  name?: string;
+  profilePicture?: string;
+  description?: string;
+}
+
+interface MediaItem {
+  type?: string; // "photo" | "video" | "animated_gif"
+  media_url_https?: string;
+  video_info?: { variants?: Variant[] };
+}
+
+interface Variant {
+  bitrate?: number;
+  content_type?: string;
+  url?: string;
 }
 
 /**
@@ -40,136 +61,115 @@ export function parsePostUrl(
 }
 
 /**
- * Scrape a post from Twitter/X
+ * Fetch a post from Twitter/X via twitterapi.io
  */
-export async function getPost(
-  browserBinding: Fetcher,
-  postUrl: string
-): Promise<Post> {
+export async function getPost(apiKey: string, postUrl: string): Promise<Post> {
+  if (!apiKey) {
+    throw new Error("TWITTERAPI_IO_KEY is not configured");
+  }
+
   const parsed = parsePostUrl(postUrl);
   if (!parsed) {
     throw new Error("Invalid X post URL");
   }
 
-  const { id, screenname } = parsed;
-  const browser = await puppeteer.launch(browserBinding);
+  const { id } = parsed;
 
-  try {
-    const page = await browser.newPage();
-    await page.setUserAgent(USER_AGENT);
+  const res = await fetch(
+    `${API_BASE}/twitter/tweets?tweet_ids=${encodeURIComponent(id)}`,
+    { headers: { "X-API-Key": apiKey } }
+  );
 
-    const targetUrl = `https://x.com/${screenname}/status/${id}`;
-    console.log(`Navigating to: ${targetUrl}`);
+  if (!res.ok) {
+    throw new Error(`twitterapi.io request failed: ${res.status}`);
+  }
 
-    await page.goto(targetUrl, { waitUntil: "networkidle0", timeout: 30000 });
+  const data = (await res.json()) as TwitterApiResponse;
+  const tweet = data.tweets?.[0];
+  if (!tweet) {
+    throw new Error("Post not found");
+  }
 
-    // Check for 404: race between tweet loading and 404 page
-    const result = await Promise.race([
-      page
-        .waitForSelector("time", { timeout: 15000 })
-        .then(() => "found" as const),
-      page
-        .waitForSelector('main [role="button"]:only-child', { timeout: 15000 })
-        .then(() => "notfound" as const),
-    ]);
+  const a = tweet.author ?? {};
+  const screenname = a.userName ?? parsed.screenname;
+  const author: Author = {
+    id: a.id ?? "",
+    screen_name: screenname,
+    name: a.name ?? "",
+    description: a.description ?? "",
+    avatar: a.profilePicture ?? "",
+    provider: "twitter",
+  };
 
-    if (result === "notfound") {
-      throw new Error("Post not found (404)");
+  const media = extractMedia(tweet.extendedEntities?.media);
+
+  return {
+    id: tweet.id,
+    provider: "twitter",
+    url: `https://x.com/${screenname}/status/${tweet.id}`,
+    timestamp: parseTimestamp(tweet.createdAt),
+    content: tweet.text ?? "",
+    author,
+    media: media.length > 0 ? media : undefined,
+  };
+}
+
+/**
+ * Convert twitterapi.io media entries into standard Media objects.
+ * Photos use the large variant; videos/GIFs use the highest-bitrate mp4.
+ */
+function extractMedia(items?: MediaItem[]): Media[] {
+  if (!items) return [];
+
+  const media: Media[] = [];
+  for (const item of items) {
+    if (item.type === "photo") {
+      if (item.media_url_https) {
+        media.push({ type: "photo", url: toLargePhoto(item.media_url_https) });
+      }
+    } else if (item.type === "video" || item.type === "animated_gif") {
+      const url = bestMp4(item.video_info?.variants);
+      if (url) {
+        media.push({ type: "video", url });
+      }
     }
+  }
+  return media;
+}
 
-    // Get text from tweet content
-    const content = await page
-      .$eval('[data-testid="tweetText"]', (el) => el.textContent || "")
-      .catch(() => "");
+/**
+ * Pick the highest-bitrate mp4 variant from a video's variants.
+ */
+function bestMp4(variants?: Variant[]): string | undefined {
+  if (!variants) return undefined;
+  let best: Variant | undefined;
+  for (const v of variants) {
+    if (v.content_type !== "video/mp4" || !v.url) continue;
+    if (!best || (v.bitrate ?? 0) > (best.bitrate ?? 0)) {
+      best = v;
+    }
+  }
+  return best?.url;
+}
 
-    // Get time from first tweet's time element
-    const timestamp = await page
-      .$eval('[data-testid="tweet"] time', (el) =>
-        el.getAttribute("datetime") || ""
-      )
-      .catch(() => "");
-
-    // Get photos
-    const photoUrls = await page
-      .$$eval('[data-testid="tweetPhoto"] img', (imgs) =>
-        imgs
-          .map((img) => img.getAttribute("src") || "")
-          .filter((src) => src && !src.includes("ext_tw_video_thumb"))
-          .map((src) => {
-            try {
-              const url = new URL(src);
-              url.searchParams.set("name", "large");
-              return url.toString();
-            } catch {
-              return src;
-            }
-          })
-      )
-      .catch(() => [] as string[]);
-
-    // Get profile
-    const author = await scrapeProfileFromPage(browser, screenname);
-
-    // Convert to standard Post format
-    const media: Media[] = photoUrls.map((url) => ({
-      type: "photo" as const,
-      url,
-    }));
-
-    return {
-      id,
-      provider: "twitter",
-      url: targetUrl,
-      timestamp,
-      content,
-      author,
-      media: media.length > 0 ? media : undefined,
-    };
-  } finally {
-    await browser.close();
+/**
+ * Add name=large to a pbs.twimg.com photo URL to get the full-size image.
+ */
+function toLargePhoto(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("name", "large");
+    return u.toString();
+  } catch {
+    return url;
   }
 }
 
 /**
- * Scrape profile information
+ * Parse twitterapi.io createdAt ("Tue Mar 21 20:50:14 +0000 2006") to ISO 8601.
  */
-async function scrapeProfileFromPage(
-  browser: Browser,
-  screenname: string
-): Promise<Author> {
-  const page = await browser.newPage();
-  await page.setUserAgent(USER_AGENT);
-
-  const profileUrl = `https://x.com/${screenname}`;
-  console.log(`Navigating to profile: ${profileUrl}`);
-
-  await page.goto(profileUrl, { waitUntil: "networkidle0", timeout: 30000 });
-
-  // Wait for profile to load
-  await page.waitForSelector('[data-testid="UserName"]', { timeout: 15000 });
-
-  // Get profile JSON from the schema element
-  const profileJson = await page
-    .$eval('[data-testid="UserProfileSchema-test"]', (el) =>
-      el.textContent || "{}"
-    )
-    .catch(() => "{}");
-
-  let parsed: ProfileJSON = {};
-  try {
-    parsed = JSON.parse(profileJson);
-  } catch {
-    console.error("Failed to parse profile JSON");
-  }
-
-  const mainEntity = parsed.mainEntity || {};
-
-  return {
-    id: mainEntity.identifier || "",
-    screen_name: screenname,
-    name: mainEntity.givenName || mainEntity.additionalName || "",
-    description: mainEntity.description || "",
-    avatar: mainEntity.image?.contentUrl || "",
-    provider: "twitter",
-  };
+function parseTimestamp(createdAt?: string): string {
+  if (!createdAt) return "";
+  const d = new Date(createdAt);
+  return isNaN(d.getTime()) ? "" : d.toISOString();
 }

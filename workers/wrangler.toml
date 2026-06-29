@@ -3,13 +3,25 @@ main = "src/index.ts"
 compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 
-# Browser Rendering API binding
-browser = { binding = "BROWSER" }
+# Browser Rendering API binding (commented out — not currently used).
+# Kept for the archived browser-based provider (src/providers/x_browser.ts),
+# which may be revived later. The active provider uses twitterapi.io instead.
+# browser = { binding = "BROWSER" }
 
 # KV namespace for storing state
 kv_namespaces = [
   { binding = "KV", id = "66a7ac6bd06249ffbc707f632eae4f34" }
 ]
+
+# D1 database for post metadata (pictures table)
+[[d1_databases]]
+binding = "DB"
+database_name = "garoo"
+database_id = "fab08063-3c3d-4646-aada-f1ac557477e3"
+
+# All config (DROPBOX_*, NOTION_*, DISCORD_*, TWITTERAPI_IO_KEY) is provided via
+# `wrangler secret put` — see Env in src/types.ts. No plaintext [vars] here so
+# they cannot clobber the secrets on deploy.
 
 # Cron trigger (every 3 minutes)
 [triggers]

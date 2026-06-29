@@ -70,6 +70,18 @@ export class D1Store implements Store {
   }
 
   /**
+   * The stored category for a post, or null if it isn't stored yet. Used to
+   * detect a category overwrite (so R2 can move the existing file).
+   */
+  async getCategory(id: string, provider: string): Promise<string | null> {
+    const row = await this.db
+      .prepare("SELECT category FROM pictures WHERE id = ? AND provider = ? LIMIT 1")
+      .bind(id, provider)
+      .first<{ category: string | null }>();
+    return row ? (row.category ?? "") : null;
+  }
+
+  /**
    * Export the pictures table as a restorable SQL dump (used by the
    * Dropbox backup in Phase F). Restore with `wrangler d1 execute --file`.
    */

@@ -275,8 +275,17 @@ async function processOneSeed(
       return { seed, post, skipped: "no media" };
     }
 
+    // Capture the previously-stored category (before D1 overwrites it) so R2
+    // can relocate existing files on a category change.
+    const d1 = D1Store.fromEnv(env);
+    const prevCategory = d1
+      ? await d1.getCategory(post.id, post.provider)
+      : null;
+    const prev =
+      prevCategory !== null ? { category: prevCategory } : undefined;
+
     for (const store of stores) {
-      await store.save(post);
+      await store.save(post, prev);
     }
     return { seed, post };
   } catch (error) {

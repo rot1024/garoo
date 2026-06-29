@@ -49,6 +49,9 @@ export interface Env {
   // D1 database for post metadata (pictures table)
   DB?: D1Database;
 
+  // R2 bucket for media files (saved alongside Dropbox)
+  R2?: R2Bucket;
+
   // Dropbox store (client creds as secrets; token state cached in KV)
   DROPBOX_CLIENT_ID?: string;
   DROPBOX_CLIENT_SECRET?: string;

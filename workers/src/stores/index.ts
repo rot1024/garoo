@@ -2,13 +2,21 @@ import type { Env, Post } from "../types";
 import { D1Store } from "./d1";
 import { DropboxStore } from "./dropbox";
 import { NotionStore } from "./notion";
+import { R2Store } from "./r2";
+
+/** Snapshot of a post's previously-stored state (from D1), passed to save(). */
+export interface PrevRecord {
+  category?: string;
+}
 
 /**
  * A store persists posts. Mirrors garoo.Store (Save) in the Go app.
+ * `prev` carries the previously-stored state (if any) so a store can react to
+ * changes (e.g. R2 moves files when the category is overwritten).
  */
 export interface Store {
   readonly name: string;
-  save(post: Post): Promise<void>;
+  save(post: Post, prev?: PrevRecord): Promise<void>;
 }
 
 /**
@@ -24,6 +32,9 @@ export function buildStores(env: Env): Store[] {
 
   const dropbox = DropboxStore.fromEnv(env);
   if (dropbox) stores.push(dropbox);
+
+  const r2 = R2Store.fromEnv(env);
+  if (r2) stores.push(r2);
 
   const notion = NotionStore.fromEnv(env);
   if (notion) stores.push(notion);

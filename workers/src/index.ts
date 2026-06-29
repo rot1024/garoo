@@ -20,6 +20,12 @@ import { isCommand, processCommand } from "./commands";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
+// Single-flight lock so overlapping cron ticks don't double-process. TTL is the
+// crash backstop (auto-releases if a run dies before the finally); normal runs
+// release it immediately on completion.
+const KV_POLL_LOCK = "poll_lock";
+const POLL_LOCK_TTL = 300;
+
 // Reaction added to the original post while importing, removed on completion.
 const IMPORTING = "⬇️";
 
@@ -74,13 +80,30 @@ async function pollDiscord(env: Env): Promise<PollResult> {
     return { status: "skipped", messagesFound: 0, processed: 0 };
   }
 
+  // Single-flight: skip if a previous poll is still running, so overlapping
+  // cron ticks can't re-read the same last_message_id and double-process.
+  if (await env.KV.get(KV_POLL_LOCK)) {
+    return { status: "locked", messagesFound: 0, processed: 0 };
+  }
+  await env.KV.put(KV_POLL_LOCK, String(Date.now()), {
+    expirationTtl: POLL_LOCK_TTL,
+  });
+
+  try {
+    return await runPoll(env);
+  } finally {
+    await env.KV.delete(KV_POLL_LOCK);
+  }
+}
+
+async function runPoll(env: Env): Promise<PollResult> {
   // Get last processed message ID from KV
   const lastMessageId = await env.KV.get(KV_LAST_MESSAGE_ID);
 
-  // Fetch new messages from Discord
+  // Fetch new messages from Discord (token/channel checked by the caller)
   const messages = await fetchMessages(
-    env.DISCORD_BOT_TOKEN,
-    env.DISCORD_CHANNEL_ID,
+    env.DISCORD_BOT_TOKEN!,
+    env.DISCORD_CHANNEL_ID!,
     lastMessageId ?? undefined
   );
 

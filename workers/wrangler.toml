@@ -19,12 +19,10 @@ binding = "DB"
 database_name = "garoo"
 database_id = "fab08063-3c3d-4646-aada-f1ac557477e3"
 
-# R2 bucket for media files (commented out until R2 is enabled on the account
-# and the bucket is created: `wrangler r2 bucket create garoo`). The R2 store
-# is auto-skipped while this binding is absent.
-# [[r2_buckets]]
-# binding = "R2"
-# bucket_name = "garoo"
+# R2 bucket for media files (saved alongside Dropbox)
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "garoo"
 
 # All config (DROPBOX_*, NOTION_*, DISCORD_*, TWITTERAPI_IO_KEY) is provided via
 # `wrangler secret put` — see Env in src/types.ts. No plaintext [vars] here so

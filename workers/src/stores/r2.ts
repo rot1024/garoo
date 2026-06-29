@@ -5,18 +5,25 @@ const DEFAULT_CATEGORY = "uncategorized";
 
 /**
  * R2 store. Saves media alongside Dropbox, but with a simpler layout: always
- * <provider>/<category>/<screenname>/<filename> (author-separated from the
- * start — no root/overflow-move logic). When a post already in D1 is re-saved
- * with a different category, the existing object is moved to the new path
- * (copy + delete within R2, no re-download).
+ * <base>/<provider>/<category>/<screenname>/<filename> (author-separated from
+ * the start — no root/overflow-move logic). The base mirrors the Dropbox base
+ * dir (e.g. "garo") so R2 and Dropbox share the same structure. When a post
+ * already in D1 is re-saved with a different category, the existing object is
+ * moved to the new path (copy + delete within R2, no re-download).
  */
 export class R2Store implements Store {
   readonly name = "r2";
 
-  constructor(private readonly bucket: R2Bucket) {}
+  constructor(
+    private readonly bucket: R2Bucket,
+    private readonly base: string
+  ) {}
 
   static fromEnv(env: Env): R2Store | null {
-    return env.R2 ? new R2Store(env.R2) : null;
+    if (!env.R2) return null;
+    // Reuse the Dropbox base dir so R2 mirrors the Dropbox layout (e.g. "garo").
+    const base = (env.DROPBOX_BASE_DIR ?? "").replace(/^\/+|\/+$/g, "");
+    return new R2Store(env.R2, base);
   }
 
   async save(post: Post, prev?: PrevRecord): Promise<void> {
@@ -31,11 +38,11 @@ export class R2Store implements Store {
 
     for (let i = 0; i < media.length; i++) {
       const name = filename(post, i, screenname);
-      const newKey = `${post.provider}/${newCat}/${screenname}/${name}`;
+      const newKey = this.key(post.provider, newCat, screenname, name);
 
       // Category overwrite: move the existing object instead of re-downloading.
       if (categoryChanged) {
-        const oldKey = `${post.provider}/${oldCat}/${screenname}/${name}`;
+        const oldKey = this.key(post.provider, oldCat!, screenname, name);
         const existing = await this.bucket.get(oldKey);
         if (existing) {
           await this.bucket.put(newKey, existing.body, {
@@ -53,6 +60,17 @@ export class R2Store implements Store {
       });
       console.log(`r2: saved ${newKey}`);
     }
+  }
+
+  private key(
+    provider: string,
+    category: string,
+    screenname: string,
+    name: string
+  ): string {
+    return [this.base, provider, category, screenname, name]
+      .filter((s) => s.length > 0)
+      .join("/");
   }
 }
 

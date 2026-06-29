@@ -12,6 +12,7 @@ import {
 import * as x from "./providers/x";
 import { buildStores, backupD1ToDropbox, type Store } from "./stores";
 import { D1Store } from "./stores/d1";
+import { isText } from "./post";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
@@ -95,7 +96,7 @@ async function pollDiscord(env: Env): Promise<PollResult> {
     if (seeds.length === 0) continue;
 
     const results = await processSeeds(seeds, env, stores);
-    saved += results.filter((r) => r.post).length;
+    saved += results.filter((r) => r.post && !r.skipped).length;
     processed++;
   }
 
@@ -124,6 +125,7 @@ interface SeedResult {
   seed: Seed;
   post?: Post;
   error?: string;
+  skipped?: string;
 }
 
 /**
@@ -179,6 +181,14 @@ async function processOneSeed(
     const post = await getPostForSeed(seed, env);
     post.category = seed.category;
     post.tags = seed.tags?.length ? seed.tags : undefined;
+
+    // Don't archive media-less posts unless they're the special text category
+    // ("_", for saving impressions/comments). Nothing to store otherwise.
+    const hasMedia = (post.media?.length ?? 0) > 0;
+    if (!hasMedia && !isText(post)) {
+      return { seed, post, skipped: "no media" };
+    }
+
     for (const store of stores) {
       await store.save(post);
     }
@@ -278,6 +288,7 @@ async function handleRescan(url: URL, env: Env): Promise<Response> {
   let errorReplies = 0;
   let reprocessed = 0;
   let skipped = 0;
+  let noMedia = 0;
   let failed = 0;
   let unresolved = 0;
   const details: unknown[] = [];
@@ -312,7 +323,10 @@ async function handleRescan(url: URL, env: Env): Promise<Response> {
         continue;
       }
       const r = await processOneSeed(seed, env, stores);
-      if (r.error) {
+      if (r.skipped) {
+        noMedia++;
+        details.push({ url: seed.url, skipped: r.skipped });
+      } else if (r.error) {
         failed++;
         details.push({ url: seed.url, error: r.error });
       } else {
@@ -332,6 +346,7 @@ async function handleRescan(url: URL, env: Env): Promise<Response> {
     errorReplies,
     unresolved,
     skipped,
+    noMedia,
     reprocessed,
     failed,
     nextBefore,

@@ -246,8 +246,12 @@ function postProperties(
     [P.postDescription]: richText(post.content),
     [P.postProvider]: select(post.provider),
     [P.postURL]: { url: post.url },
-    [P.postDate]: { date: { start: post.timestamp } },
   };
+
+  // Notion rejects an empty date string; only set Date when we have a timestamp.
+  if (post.timestamp) {
+    properties[P.postDate] = { date: { start: post.timestamp } };
+  }
 
   if (!isSpecialCategory(post)) {
     properties[P.postCategory] = select(post.category ?? "");

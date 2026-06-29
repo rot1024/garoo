@@ -61,6 +61,7 @@ export class DropboxStore implements Store {
     // Look up the author dir; if present, save there.
     const authorDir = this.dirpathWithAuthorName(post);
     if (await this.folderExists(authorDir)) {
+      console.log(`dropbox: found author dir ${authorDir}`);
       await this.savePostTo(post, authorDir);
       return;
     }
@@ -68,6 +69,7 @@ export class DropboxStore implements Store {
     // Create the root dir if needed.
     const rootDir = this.dirpath(post);
     if (!(await this.folderExists(rootDir))) {
+      console.log(`dropbox: creating root dir ${rootDir}`);
       await this.createDir(rootDir);
     }
 
@@ -80,12 +82,17 @@ export class DropboxStore implements Store {
       // NOTE: parity with dropbox/store.go — the new dir uses the raw
       // screenname (not lowercased, unlike dirpathWithAuthorName).
       const newDir = joinPath(rootDir, post.author.screen_name);
+      console.log(
+        `dropbox: too many files in root (${files.length}+${media.length}>${MAX_ROOT_FILES_PER_AUTHOR}); moving ${files.length} file(s) to ${newDir}`
+      );
       await this.createDir(newDir);
       await this.moveFiles(files, newDir);
+      console.log(`dropbox: moved ${files.length} file(s) to ${newDir}`);
       await this.savePostTo(post, newDir);
       return;
     }
 
+    console.log(`dropbox: saving to root dir ${rootDir}`);
     await this.savePostTo(post, rootDir);
   }
 
@@ -95,6 +102,7 @@ export class DropboxStore implements Store {
       const dest = joinPath(dir, filename(post, i));
       const data = await this.download(media[i].url);
       await this.upload(dest, data);
+      console.log(`dropbox: saved ${i + 1}/${media.length} ${dest}`);
     }
   }
 

@@ -14,3 +14,8 @@ kv_namespaces = [
 # Cron trigger (every 3 minutes)
 [triggers]
 crons = ["*/3 * * * *"]
+
+# Observability (Workers Logs)
+[observability]
+enabled = true
+head_sampling_rate = 1

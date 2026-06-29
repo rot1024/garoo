@@ -22,9 +22,6 @@ export default {
         service: "garoo",
         endpoints: {
           "/webhook": "POST - Process message and scrape posts",
-          "/trigger": "POST - Debug: manually trigger Discord polling",
-          "/scrape": "GET - Debug: scrape a single post",
-          "/screenshot": "GET - Debug: take screenshot",
         },
       });
     }
@@ -32,59 +29,6 @@ export default {
     // Main webhook endpoint
     if (url.pathname === "/webhook" && request.method === "POST") {
       return handleWebhook(request, env);
-    }
-
-    // Debug: manually trigger Discord polling
-    if (url.pathname === "/trigger" && request.method === "POST") {
-      try {
-        const result = await pollDiscord(env);
-        return Response.json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500 });
-      }
-    }
-
-    // Debug: scrape endpoint
-    if (url.pathname === "/scrape") {
-      const postUrl = url.searchParams.get("url");
-      if (!postUrl) {
-        return Response.json(
-          { error: "url parameter is required" },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const post = await x.getPost(env.BROWSER, postUrl);
-        return Response.json(post);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500 });
-      }
-    }
-
-    // Debug: screenshot endpoint
-    if (url.pathname === "/screenshot") {
-      const targetUrl = url.searchParams.get("url");
-      if (!targetUrl) {
-        return Response.json(
-          { error: "url parameter is required" },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const screenshot = await x.takeScreenshot(env.BROWSER, targetUrl);
-        return new Response(screenshot as unknown as ArrayBuffer, {
-          headers: { "Content-Type": "image/png" },
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500 });
-      }
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

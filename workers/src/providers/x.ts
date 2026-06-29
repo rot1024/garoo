@@ -40,13 +40,6 @@ export function parsePostUrl(
 }
 
 /**
- * Check if URL is a valid Twitter/X post
- */
-export function check(url: string): boolean {
-  return parsePostUrl(url) !== null;
-}
-
-/**
  * Scrape a post from Twitter/X
  */
 export async function getPost(
@@ -179,30 +172,4 @@ async function scrapeProfileFromPage(
     avatar: mainEntity.image?.contentUrl || "",
     provider: "twitter",
   };
-}
-
-/**
- * Take a screenshot (for debugging)
- */
-export async function takeScreenshot(
-  browserBinding: Fetcher,
-  targetUrl: string
-): Promise<Uint8Array> {
-  const browser = await puppeteer.launch(browserBinding);
-
-  try {
-    const page = await browser.newPage();
-    await page.setUserAgent(USER_AGENT);
-    await page.setViewport({ width: 1280, height: 800 });
-
-    await page.goto(targetUrl, { waitUntil: "networkidle0", timeout: 30000 });
-
-    // Wait a bit for any dynamic content
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const screenshot = await page.screenshot({ fullPage: false });
-    return screenshot;
-  } finally {
-    await browser.close();
-  }
 }

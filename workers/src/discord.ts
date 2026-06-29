@@ -11,6 +11,8 @@ export interface DiscordMessage {
     bot?: boolean;
   };
   timestamp: string;
+  message_reference?: { message_id?: string };
+  referenced_message?: DiscordMessage | null;
 }
 
 /**
@@ -38,6 +40,54 @@ export async function fetchMessages(
 
   if (!response.ok) {
     throw new Error(`Discord API failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch messages older than a given message ID (newest-first), for backward
+ * scanning of channel history. Used by the /rescan backfill.
+ */
+export async function fetchMessagesBefore(
+  botToken: string,
+  channelId: string,
+  before?: string,
+  limit = 50
+): Promise<DiscordMessage[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before) {
+    params.set("before", before);
+  }
+
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages?${params}`,
+    { headers: { Authorization: `Bot ${botToken}` } }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Discord API failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch a single message by ID (used to resolve an error reply's original
+ * message when it is not inlined as referenced_message).
+ */
+export async function fetchMessage(
+  botToken: string,
+  channelId: string,
+  messageId: string
+): Promise<DiscordMessage | null> {
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages/${messageId}`,
+    { headers: { Authorization: `Bot ${botToken}` } }
+  );
+
+  if (!response.ok) {
+    return null;
   }
 
   return response.json();

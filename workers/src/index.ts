@@ -2,13 +2,16 @@ import type { Env, WebhookPayload, Post, Seed } from "./types";
 import { extractSeeds } from "./seed";
 import {
   fetchMessages,
+  fetchMessagesBefore,
+  fetchMessage,
   sendMessage,
   formatProgress,
   formatSuccess,
-  formatError,
+  type DiscordMessage,
 } from "./discord";
 import * as x from "./providers/x";
 import { buildStores, backupD1ToDropbox, type Store } from "./stores";
+import { D1Store } from "./stores/d1";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
@@ -23,6 +26,8 @@ export default {
         service: "garoo",
         endpoints: {
           "/webhook": "POST - Process message and scrape posts",
+          "/rescan":
+            "GET - Backfill: scan older messages for failed posts and re-process (dry-run unless ?dry=0)",
         },
       });
     }
@@ -30,6 +35,11 @@ export default {
     // Main webhook endpoint
     if (url.pathname === "/webhook" && request.method === "POST") {
       return handleWebhook(request, env);
+    }
+
+    // Backfill: re-process posts that previously failed (bot ❌ replies)
+    if (url.pathname === "/rescan") {
+      return handleRescan(url, env);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });
@@ -136,28 +146,16 @@ async function processSeeds(
 
     await notify(env, canNotify, formatProgress(index, total, seed));
 
-    try {
-      const post = await getPostForSeed(seed, env);
+    const result = await processOneSeed(seed, env, stores);
+    results.push(result);
 
-      // Attach category and tags
-      post.category = seed.category;
-      post.tags = seed.tags?.length ? seed.tags : undefined;
-
-      // Save to every configured store (D1 / Dropbox / Notion)
-      for (const store of stores) {
-        await store.save(post);
-      }
-
-      results.push({ seed, post });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      results.push({ seed, error: message });
+    if (result.error) {
       // Mention the owner on errors (parity with Go's MentionToUser).
       const mention = env.DISCORD_USER_ID ? `<@${env.DISCORD_USER_ID}> ` : "";
       await notify(
         env,
         canNotify,
-        mention + formatError(index, total, error as Error)
+        mention + `❌ ${index}/${total}: ${result.error}`
       );
     }
   }
@@ -166,6 +164,29 @@ async function processSeeds(
   await notify(env, canNotify, formatSuccess());
 
   return results;
+}
+
+/**
+ * Fetch a seed's post and save it to every configured store. No Discord
+ * notifications — callers (processSeeds / rescan) handle those as needed.
+ */
+async function processOneSeed(
+  seed: Seed,
+  env: Env,
+  stores: Store[]
+): Promise<SeedResult> {
+  try {
+    const post = await getPostForSeed(seed, env);
+    post.category = seed.category;
+    post.tags = seed.tags?.length ? seed.tags : undefined;
+    for (const store of stores) {
+      await store.save(post);
+    }
+    return { seed, post };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { seed, error: message };
+  }
 }
 
 async function getPostForSeed(seed: Seed, env: Env): Promise<Post> {
@@ -214,5 +235,106 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
     status: "ok",
     processed: seeds.length,
     results,
+  });
+}
+
+/**
+ * Backfill: scan older channel messages for the bot's "❌ … failed …" error
+ * replies, resolve each referenced original message, and re-process its
+ * seed(s) that are not already in D1. Resumable via the returned `nextBefore`
+ * cursor. Dry-run by default; pass ?dry=0 to actually re-process.
+ */
+async function handleRescan(url: URL, env: Env): Promise<Response> {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_CHANNEL_ID) {
+    return Response.json({ error: "Discord not configured" }, { status: 400 });
+  }
+
+  const before = url.searchParams.get("before") ?? undefined;
+  const limit = Math.min(
+    Number(url.searchParams.get("limit") ?? "50") || 50,
+    100
+  );
+  const dryParam = url.searchParams.get("dry");
+  const dry = dryParam !== "0" && dryParam !== "false"; // default: dry-run
+
+  const messages = await fetchMessagesBefore(
+    env.DISCORD_BOT_TOKEN,
+    env.DISCORD_CHANNEL_ID,
+    before,
+    limit
+  );
+
+  if (messages.length === 0) {
+    return Response.json({
+      status: "done",
+      scanned: 0,
+      message: "no older messages",
+    });
+  }
+
+  const stores = buildStores(env);
+  const d1 = D1Store.fromEnv(env);
+
+  let errorReplies = 0;
+  let reprocessed = 0;
+  let skipped = 0;
+  let failed = 0;
+  let unresolved = 0;
+  const details: unknown[] = [];
+
+  for (const m of messages) {
+    if (!m.author?.bot) continue;
+    if (!m.content || !m.content.includes("❌")) continue;
+    errorReplies++;
+
+    // Resolve the original message this error replied to.
+    let original: DiscordMessage | null = m.referenced_message ?? null;
+    if (!original && m.message_reference?.message_id) {
+      original = await fetchMessage(
+        env.DISCORD_BOT_TOKEN,
+        env.DISCORD_CHANNEL_ID,
+        m.message_reference.message_id
+      );
+    }
+    if (!original?.content) {
+      unresolved++;
+      continue;
+    }
+
+    for (const seed of extractSeeds(original.content)) {
+      const id = x.parsePostUrl(seed.url)?.id;
+      if (d1 && id && (await d1.has(id, seed.provider))) {
+        skipped++;
+        continue;
+      }
+      if (dry) {
+        details.push({ would_reprocess: seed.url, category: seed.category });
+        continue;
+      }
+      const r = await processOneSeed(seed, env, stores);
+      if (r.error) {
+        failed++;
+        details.push({ url: seed.url, error: r.error });
+      } else {
+        reprocessed++;
+        details.push({ url: seed.url, ok: true, id: r.post?.id });
+      }
+    }
+  }
+
+  // Oldest message in this batch — pass as ?before= to continue going back.
+  const nextBefore = messages[messages.length - 1].id;
+
+  return Response.json({
+    status: "ok",
+    dry,
+    scanned: messages.length,
+    errorReplies,
+    unresolved,
+    skipped,
+    reprocessed,
+    failed,
+    nextBefore,
+    details,
   });
 }

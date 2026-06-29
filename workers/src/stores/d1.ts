@@ -60,6 +60,15 @@ export class D1Store implements Store {
       .run();
   }
 
+  /** Whether a post (id + provider) is already stored. Used by /rescan dedup. */
+  async has(id: string, provider: string): Promise<boolean> {
+    const row = await this.db
+      .prepare("SELECT 1 FROM pictures WHERE id = ? AND provider = ? LIMIT 1")
+      .bind(id, provider)
+      .first();
+    return row !== null;
+  }
+
   /**
    * Export the pictures table as a restorable SQL dump (used by the
    * Dropbox backup in Phase F). Restore with `wrangler d1 execute --file`.

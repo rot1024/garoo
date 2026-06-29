@@ -94,13 +94,22 @@ export async function fetchMessage(
 }
 
 /**
- * Send a message to Discord channel via Bot API
+ * Send a message to a Discord channel via the Bot API. When replyToMessageId is
+ * given, the message is sent as a threaded reply to that message (without
+ * auto-pinging the replied-to user; explicit <@id> mentions still ping).
  */
 export async function sendMessage(
   botToken: string,
   channelId: string,
-  message: string
-): Promise<void> {
+  message: string,
+  replyToMessageId?: string
+): Promise<string | undefined> {
+  const body: Record<string, unknown> = { content: message };
+  if (replyToMessageId) {
+    body.message_reference = { message_id: replyToMessageId };
+    body.allowed_mentions = { parse: ["users"], replied_user: false };
+  }
+
   const response = await fetch(
     `${DISCORD_API_BASE}/channels/${channelId}/messages`,
     {
@@ -109,29 +118,101 @@ export async function sendMessage(
         Authorization: `Bot ${botToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        content: message,
-      }),
+      body: JSON.stringify(body),
     }
   );
 
   if (!response.ok) {
     throw new Error(`Discord API failed: ${response.status}`);
   }
+
+  const msg = (await response.json()) as { id?: string };
+  return msg.id;
 }
 
 /**
- * Format progress message
+ * Edit a message's content (used to resolve a progress message into its
+ * final ✅ / ❌ / ⏭️ outcome).
+ */
+export async function editMessage(
+  botToken: string,
+  channelId: string,
+  messageId: string,
+  content: string
+): Promise<void> {
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages/${messageId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Discord edit failed: ${response.status}`);
+  }
+}
+
+/**
+ * Add an emoji reaction to a message (e.g. ✅ / ❌ on the original post).
+ */
+export async function addReaction(
+  botToken: string,
+  channelId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(
+      emoji
+    )}/@me`,
+    { method: "PUT", headers: { Authorization: `Bot ${botToken}` } }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Discord reaction failed: ${response.status}`);
+  }
+}
+
+/**
+ * Remove the bot's own emoji reaction from a message.
+ */
+export async function removeReaction(
+  botToken: string,
+  channelId: string,
+  messageId: string,
+  emoji: string
+): Promise<void> {
+  const response = await fetch(
+    `${DISCORD_API_BASE}/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(
+      emoji
+    )}/@me`,
+    { method: "DELETE", headers: { Authorization: `Bot ${botToken}` } }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Discord reaction removal failed: ${response.status}`);
+  }
+}
+
+/**
+ * Format a progress/outcome line. The emoji conveys state: ⬇️ in progress,
+ * ✅ done, ❌ failed, ⏭️ skipped.
  * Example: "⬇️ 1/3: (provider=twitter category=`art` tags=`tag1,tag2`)"
  */
 export function formatProgress(
   index: number,
   total: number,
-  seed: Seed
+  seed: Seed,
+  emoji = "⬇️"
 ): string {
   const category = seed.category ? `\`${seed.category}\`` : "-";
   const tags = seed.tags?.length ? `\`${seed.tags.join(",")}\`` : "-";
-  return `⬇️ ${index}/${total}: (provider=${seed.provider} category=${category} tags=${tags})`;
+  return `${emoji} ${index}/${total}: (provider=${seed.provider} category=${category} tags=${tags})`;
 }
 
 /**

@@ -208,6 +208,51 @@ export class DropboxStore implements Store {
     return (await res.json()) as T;
   }
 
+  // --- OAuth login (garoo login dropbox <code>) ---
+
+  /** Dropbox authorize URL; no redirect_uri, so Dropbox shows the code to copy. */
+  authUrl(): string {
+    const p = new URLSearchParams({
+      client_id: this.clientId,
+      response_type: "code",
+      token_access_type: "offline",
+    });
+    return `https://www.dropbox.com/oauth2/authorize?${p.toString()}`;
+  }
+
+  /** Exchange an authorization code for tokens and store the refresh token in KV. */
+  async exchangeCode(code: string): Promise<void> {
+    const res = await fetch(`${API}/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        grant_type: "authorization_code",
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `dropbox token exchange failed (${res.status}): ${await res.text()}`
+      );
+    }
+    const tok = (await res.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in: number;
+    };
+    if (!tok.refresh_token) {
+      throw new Error("no refresh_token in response");
+    }
+    const state: TokenState = {
+      access_token: tok.access_token,
+      refresh_token: tok.refresh_token,
+      expiry_ms: Date.now() + tok.expires_in * 1000,
+    };
+    await this.kv.put(KV_TOKEN_KEY, JSON.stringify(state));
+  }
+
   // --- Auth (KV-backed OAuth2 refresh) ---
 
   private async accessToken(): Promise<string> {

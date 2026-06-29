@@ -5,6 +5,9 @@ import {
   fetchMessagesBefore,
   fetchMessage,
   sendMessage,
+  editMessage,
+  addReaction,
+  removeReaction,
   formatProgress,
   formatSuccess,
   type DiscordMessage,
@@ -13,8 +16,12 @@ import * as x from "./providers/x";
 import { buildStores, backupD1ToDropbox, type Store } from "./stores";
 import { D1Store } from "./stores/d1";
 import { isText } from "./post";
+import { isCommand, processCommand } from "./commands";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
+
+// Reaction added to the original post while importing, removed on completion.
+const IMPORTING = "⬇️";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -85,19 +92,53 @@ async function pollDiscord(env: Env): Promise<PollResult> {
   const sortedMessages = [...messages].reverse();
   const stores = buildStores(env);
 
+  const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
+
   let processed = 0;
   let saved = 0;
   for (const message of sortedMessages) {
     // Skip bot messages
     if (message.author.bot) continue;
 
+    const content = message.content ?? "";
+
+    // Handle commands (e.g. "garoo login dropbox <code>")
+    if (isCommand(content)) {
+      await processCommand(content, env, message.id);
+      processed++;
+      continue;
+    }
+
     // Extract seeds from message
-    const seeds = extractSeeds(message.content);
+    const seeds = extractSeeds(content);
     if (seeds.length === 0) continue;
 
-    const results = await processSeeds(seeds, env, stores);
+    const ch = env.DISCORD_CHANNEL_ID!;
+    const token = env.DISCORD_BOT_TOKEN!;
+
+    // Importing: mark the original post while we work.
+    if (canNotify) {
+      await addReaction(token, ch, message.id, IMPORTING).catch((e) =>
+        console.error("reaction failed:", e)
+      );
+    }
+
+    const results = await processSeeds(seeds, env, stores, message.id);
     saved += results.filter((r) => r.post && !r.skipped).length;
     processed++;
+
+    // Done: remove the importing mark and react with the outcome.
+    if (canNotify) {
+      await removeReaction(token, ch, message.id, IMPORTING).catch(() => {});
+      const emoji = results.some((r) => r.error)
+        ? "❌"
+        : results.some((r) => r.post && !r.skipped)
+          ? "✅"
+          : "⏭️";
+      await addReaction(token, ch, message.id, emoji).catch((e) =>
+        console.error("reaction failed:", e)
+      );
+    }
   }
 
   // Save the newest message ID
@@ -129,14 +170,17 @@ interface SeedResult {
 }
 
 /**
- * Fetch each seed's post and save it to every configured store, sending
- * Discord progress/error/completion notifications along the way.
- * Shared by both the webhook and the scheduled Discord poll.
+ * Fetch each seed's post and save it to every configured store, sending Discord
+ * progress/error notifications along the way. When replyTo is given (the poll
+ * path), notifications are threaded replies to the original message; the caller
+ * signals completion via a reaction. The webhook path passes no replyTo and
+ * sends its own completion message.
  */
 async function processSeeds(
   seeds: Seed[],
   env: Env,
-  stores: Store[]
+  stores: Store[],
+  replyTo?: string
 ): Promise<SeedResult[]> {
   const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
   const results: SeedResult[] = [];
@@ -146,24 +190,43 @@ async function processSeeds(
     const index = i + 1;
     const total = seeds.length;
 
-    await notify(env, canNotify, formatProgress(index, total, seed));
+    // Per-seed progress message (shows mid-progress for multi-item posts); its
+    // id lets us edit it into the final outcome.
+    const progressId = await notify(
+      env,
+      canNotify,
+      formatProgress(index, total, seed),
+      replyTo
+    );
 
     const result = await processOneSeed(seed, env, stores);
     results.push(result);
 
-    if (result.error) {
-      // Mention the owner on errors (parity with Go's MentionToUser).
-      const mention = env.DISCORD_USER_ID ? `<@${env.DISCORD_USER_ID}> ` : "";
+    // Resolve the progress message to its outcome (⬇️ → ✅ / ❌ / ⏭️).
+    const emoji = result.error ? "❌" : result.skipped ? "⏭️" : "✅";
+    let line = formatProgress(index, total, seed, emoji);
+    if (result.error) line += ` — ${result.error}`;
+    else if (result.skipped) line += ` — ${result.skipped}`;
+    if (progressId) {
+      await editMessage(
+        env.DISCORD_BOT_TOKEN!,
+        env.DISCORD_CHANNEL_ID!,
+        progressId,
+        line
+      ).catch((e) => console.error("edit progress failed:", e));
+    }
+
+    // Editing doesn't re-trigger a notification, so ping the owner separately
+    // on errors (parity with Go's MentionToUser).
+    if (result.error && env.DISCORD_USER_ID) {
       await notify(
         env,
         canNotify,
-        mention + `❌ ${index}/${total}: ${result.error}`
+        `<@${env.DISCORD_USER_ID}> ❌ ${index}/${total}: ${result.error}`,
+        replyTo
       );
     }
   }
-
-  // Send completion notification
-  await notify(env, canNotify, formatSuccess());
 
   return results;
 }
@@ -209,13 +272,20 @@ async function getPostForSeed(seed: Seed, env: Env): Promise<Post> {
 async function notify(
   env: Env,
   canNotify: boolean,
-  message: string
-): Promise<void> {
-  if (!canNotify) return;
+  message: string,
+  replyTo?: string
+): Promise<string | undefined> {
+  if (!canNotify) return undefined;
   try {
-    await sendMessage(env.DISCORD_BOT_TOKEN!, env.DISCORD_CHANNEL_ID!, message);
+    return await sendMessage(
+      env.DISCORD_BOT_TOKEN!,
+      env.DISCORD_CHANNEL_ID!,
+      message,
+      replyTo
+    );
   } catch (e) {
     console.error("Failed to send notification:", e);
+    return undefined;
   }
 }
 
@@ -240,6 +310,10 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
   const stores = buildStores(env);
   const results = await processSeeds(seeds, env, stores);
+
+  // Completion notification (webhook has no source message to react to).
+  const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
+  await notify(env, canNotify, formatSuccess());
 
   return Response.json({
     status: "ok",

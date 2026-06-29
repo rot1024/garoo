@@ -48,9 +48,11 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
   let orphans = 0;
   let misplaced = 0;
   let nonTwitter = 0;
+  let failed = 0;
   const orphanList: string[] = [];
   const misplacedList: Array<{ path: string; target: string }> = [];
   const nonTwitterList: string[] = [];
+  const failedList: Array<{ path: string; error: string }> = [];
 
   for (const path of files) {
     // A twitter file is identified by its "<screenname>_<tweetid>" filename,
@@ -66,42 +68,50 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
     const screenname = m[1];
     const id = m[2];
 
-    const d1cat = await d1.getCategory(id, PROVIDER);
-    if (d1cat === null) {
-      orphans++;
-      orphanList.push(path);
-      continue;
-    }
-    const category = d1cat.length > 0 ? d1cat : DEFAULT_CATEGORY;
+    try {
+      const d1cat = await d1.getCategory(id, PROVIDER);
+      if (d1cat === null) {
+        orphans++;
+        orphanList.push(path);
+        continue;
+      }
+      const category = d1cat.length > 0 ? d1cat : DEFAULT_CATEGORY;
 
-    // R2 key — D1 category is authoritative; always author-separated.
-    const key = [base, PROVIDER, category, screenname, filename].join("/");
+      // R2 key — D1 category is authoritative; always author-separated.
+      const key = [base, PROVIDER, category, screenname, filename].join("/");
 
-    // Misplaced = not under the correct *category* folder in Dropbox (e.g. it's
-    // in /garo/unsaved/ or an old category). Author-subdir vs category-root
-    // doesn't matter. Record it so the Dropbox side can be reconciled later.
-    const correctPrefix = `${basePrefix}/${PROVIDER}/${category.toLowerCase()}/`;
-    if (!path.toLowerCase().startsWith(correctPrefix)) {
-      misplaced++;
-      if (misplacedList.length < 50) {
-        misplacedList.push({
-          path,
-          target: `/${[base, PROVIDER, category, filename].join("/")}`,
-        });
+      // Misplaced = not under the correct *category* folder in Dropbox (e.g.
+      // it's in /garo/unsaved/ or an old category). Author-subdir vs
+      // category-root doesn't matter. Recorded for a later Dropbox reconcile.
+      const correctPrefix = `${basePrefix}/${PROVIDER}/${category.toLowerCase()}/`;
+      if (!path.toLowerCase().startsWith(correctPrefix)) {
+        misplaced++;
+        if (misplacedList.length < 50) {
+          misplacedList.push({
+            path,
+            target: `/${[base, PROVIDER, category, filename].join("/")}`,
+          });
+        }
+      }
+
+      if (await env.R2.head(key)) {
+        existing++;
+        continue;
+      }
+      if (dry) continue;
+
+      const data = await dropbox.downloadFile(path);
+      await env.R2.put(key, data, {
+        httpMetadata: { contentType: contentType(filename) },
+      });
+      imported++;
+    } catch (e) {
+      // One bad file shouldn't fail the whole page; record and continue.
+      failed++;
+      if (failedList.length < 10) {
+        failedList.push({ path, error: e instanceof Error ? e.message : String(e) });
       }
     }
-
-    if (await env.R2.head(key)) {
-      existing++;
-      continue;
-    }
-    if (dry) continue;
-
-    const data = await dropbox.downloadFile(path);
-    await env.R2.put(key, data, {
-      httpMetadata: { contentType: contentType(filename) },
-    });
-    imported++;
   }
 
   return Response.json({
@@ -113,11 +123,13 @@ export async function handleImport(url: URL, env: Env): Promise<Response> {
     orphans,
     misplaced,
     nonTwitter,
+    failed,
     hasMore,
     nextCursor,
     orphanList,
     misplacedList,
     nonTwitterList,
+    failedList,
   });
 }
 

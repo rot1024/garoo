@@ -30,23 +30,40 @@ const POLL_LOCK_TTL = 300;
 // Reaction added to the original post while importing, removed on completion.
 const IMPORTING = "⬇️";
 
+/** Whether unauthenticated HTTP action endpoints are exposed (debug/admin). */
+function isDebug(env: Env): boolean {
+  return env.DEBUG === "true" || env.DEBUG === "1";
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const debug = isDebug(env);
 
-    // Health check
+    // Health check (always available)
     if (url.pathname === "/") {
       return Response.json({
         status: "ok",
         service: "garoo",
-        endpoints: {
-          "/webhook": "POST - Process message and scrape posts",
-          "/rescan":
-            "GET - Backfill: scan older messages for failed posts and re-process (dry-run unless ?dry=0)",
-          "/import-dropbox":
-            "GET - Backfill: import existing Dropbox media into R2 (dry-run unless ?dry=0)",
-        },
+        debug,
+        // The action endpoints below have no auth, so they are only served when
+        // DEBUG mode is on. The production flow runs via the cron trigger.
+        endpoints: debug
+          ? {
+              "/webhook": "POST - Process message and scrape posts",
+              "/rescan":
+                "GET - Backfill: scan older messages for failed posts and re-process (dry-run unless ?dry=0)",
+              "/import-dropbox":
+                "GET - Backfill: import existing Dropbox media into R2 (dry-run unless ?dry=0)",
+            }
+          : {},
       });
+    }
+
+    // All other endpoints are unauthenticated debug/admin actions — only
+    // exposed when DEBUG mode is enabled (via the DEBUG var/secret).
+    if (!debug) {
+      return Response.json({ error: "Not found" }, { status: 404 });
     }
 
     // Main webhook endpoint

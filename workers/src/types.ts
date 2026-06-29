@@ -37,6 +37,8 @@ export interface Seed {
 
 export interface Env {
   KV: KVNamespace;
+  // "true"/"1" exposes the unauthenticated HTTP action endpoints (debug/admin).
+  DEBUG?: string;
   TWITTERAPI_IO_KEY?: string;
   // Kept for the archived browser-based provider (providers/x_browser.ts),
   // which may be revived later. Not used by the active twitterapi.io provider.

@@ -17,6 +17,7 @@ import { buildStores, backupD1ToDropbox, type Store } from "./stores";
 import { D1Store } from "./stores/d1";
 import { isText } from "./post";
 import { isCommand, processCommand } from "./commands";
+import { handleImport } from "./import";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
@@ -42,6 +43,8 @@ export default {
           "/webhook": "POST - Process message and scrape posts",
           "/rescan":
             "GET - Backfill: scan older messages for failed posts and re-process (dry-run unless ?dry=0)",
+          "/import-dropbox":
+            "GET - Backfill: import existing Dropbox media into R2 (dry-run unless ?dry=0)",
         },
       });
     }
@@ -54,6 +57,11 @@ export default {
     // Backfill: re-process posts that previously failed (bot ❌ replies)
     if (url.pathname === "/rescan") {
       return handleRescan(url, env);
+    }
+
+    // Backfill: import existing Dropbox media into R2 (dry-run unless ?dry=0)
+    if (url.pathname === "/import-dropbox") {
+      return handleImport(url, env);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

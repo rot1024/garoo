@@ -13,6 +13,12 @@ interface TokenState {
   expiry_ms?: number;
 }
 
+interface DropboxListResult {
+  entries?: Array<{ [".tag"]?: string; path_lower?: string }>;
+  cursor?: string;
+  has_more?: boolean;
+}
+
 /**
  * Dropbox store. Faithful port of dropbox/store.go + auth.go.
  *
@@ -206,6 +212,57 @@ export class DropboxStore implements Store {
       );
     }
     return (await res.json()) as T;
+  }
+
+  // --- Listing / download (used by the Dropbox → R2 import) ---
+
+  /** The configured base dir, normalized with a leading slash (e.g. "/garo"). */
+  baseDirPath(): string {
+    return joinPath(this.baseDir);
+  }
+
+  /**
+   * Recursively list files under the base dir, one page at a time. Pass the
+   * returned cursor back to continue. `limit` bounds entries per page so a
+   * single import invocation stays within the subrequest budget.
+   */
+  async listFolder(
+    cursor?: string,
+    limit = 100
+  ): Promise<{ files: string[]; cursor: string; hasMore: boolean }> {
+    const data = cursor
+      ? await this.rpcJson<DropboxListResult>("/2/files/list_folder/continue", {
+          cursor,
+        })
+      : await this.rpcJson<DropboxListResult>("/2/files/list_folder", {
+          path: this.baseDirPath(),
+          recursive: true,
+          limit,
+        });
+
+    const files = (data.entries ?? [])
+      .filter((e) => e[".tag"] === "file" && e.path_lower)
+      .map((e) => e.path_lower as string);
+
+    return { files, cursor: data.cursor ?? "", hasMore: !!data.has_more };
+  }
+
+  /** Download a Dropbox file's bytes by its path. */
+  async downloadFile(path: string): Promise<ArrayBuffer> {
+    const token = await this.accessToken();
+    const res = await fetch(`${CONTENT}/2/files/download`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Dropbox-API-Arg": apiArg({ path }),
+      },
+    });
+    if (!res.ok) {
+      throw new Error(
+        `dropbox download failed (${res.status}): ${await res.text()}`
+      );
+    }
+    return res.arrayBuffer();
   }
 
   // --- OAuth login (garoo login dropbox <code>) ---

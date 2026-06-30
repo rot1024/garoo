@@ -29,7 +29,7 @@ bucket_name = "garoo"
 # production to serve only the health check. (No secret named DEBUG exists, so
 # this var does not clobber any secret.)
 [vars]
-DEBUG = "true"
+DEBUG = "false"
 
 # All config (DROPBOX_*, NOTION_*, DISCORD_*, TWITTERAPI_IO_KEY) is provided via
 # `wrangler secret put` — see Env in src/types.ts. No plaintext [vars] here so

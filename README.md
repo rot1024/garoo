@@ -24,10 +24,31 @@ Media-less posts are not stored unless they use the special text category `_`.
 
 ## Endpoints
 
+`GET /` (the health check) is always available. The other endpoints are
+unauthenticated admin/maintenance actions and are **only served when `DEBUG` is
+`"true"`** (otherwise they return 404 — see [Debug mode](#debug-mode)). The
+production flow runs via the cron trigger, not these endpoints.
+
 - `GET /` — health check / endpoint list
-- `POST /webhook` — process a message and save its posts
-- `GET /rescan` — backfill: re-process posts that previously failed (bot `❌` replies). Dry-run unless `?dry=0`
-- `GET /import-dropbox` — backfill: import existing Dropbox media into R2. Dry-run unless `?dry=0`
+- `POST /webhook` — process a message (`{ "content": "<url> <category> <tags...>" }`) and save its posts
+- `GET /rescan` — backfill: re-process posts that previously failed (bot `❌` replies). Dry-run unless `?dry=0`; resumable via the returned `nextBefore`
+- `GET /import-dropbox` — backfill: import existing Dropbox media into R2. Dry-run unless `?dry=0`; resumable via the returned `nextCursor`
+- `GET /reconcile?target=r2|dropbox|notion` — sync a store to the D1 categories (D1 is the source of truth). Moves/relabels any item whose category drifted from D1. Idempotent and re-runnable for any future drift; dry-run unless `?dry=0`; resumable via the returned `nextCursor`
+
+### Debug mode
+
+`DEBUG` (a `wrangler.toml` var or secret) gates the action endpoints above. Set
+it to `"true"` to run maintenance (`/rescan`, `/import-dropbox`, `/reconcile`,
+`/webhook`), then back to `"false"` to lock down. With `DEBUG` off, only `GET /`
+responds.
+
+### Categories
+
+D1 is the source of truth for a post's category. If categories drift across
+stores (a renamed/normalized category, a missed move, files left in the wrong
+folder), normalize D1 first (e.g. `UPDATE pictures SET category=...`) and then
+run `GET /reconcile?target=...&dry=0` for each store to bring Dropbox, R2, and
+Notion back in line.
 
 ## Commands (post in Discord)
 

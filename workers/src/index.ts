@@ -18,6 +18,7 @@ import { D1Store } from "./stores/d1";
 import { isText } from "./post";
 import { isCommand, processCommand } from "./commands";
 import { handleImport } from "./import";
+import { handleReconcile } from "./reconcile";
 
 const KV_LAST_MESSAGE_ID = "last_message_id";
 
@@ -79,6 +80,11 @@ export default {
     // Backfill: import existing Dropbox media into R2 (dry-run unless ?dry=0)
     if (url.pathname === "/import-dropbox") {
       return handleImport(url, env);
+    }
+
+    // Reconcile a store to the normalized D1 categories (dry-run unless ?dry=0)
+    if (url.pathname === "/reconcile") {
+      return handleReconcile(url, env);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

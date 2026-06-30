@@ -70,6 +70,28 @@ export class D1Store implements Store {
   }
 
   /**
+   * Batch lookup: map of id → stored category for the given ids (only ids that
+   * exist in D1 are present in the map). Used by the reconcile to compare many
+   * files/pages against D1 in one query.
+   */
+  async getCategories(
+    ids: string[],
+    provider: string
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (ids.length === 0) return map;
+    const placeholders = ids.map(() => "?").join(",");
+    const { results } = await this.db
+      .prepare(
+        `SELECT id, category FROM pictures WHERE provider = ? AND id IN (${placeholders})`
+      )
+      .bind(provider, ...ids)
+      .all<{ id: string; category: string | null }>();
+    for (const r of results) map.set(r.id, r.category ?? "");
+    return map;
+  }
+
+  /**
    * The stored category for a post, or null if it isn't stored yet. Used to
    * detect a category overwrite (so R2 can move the existing file).
    */

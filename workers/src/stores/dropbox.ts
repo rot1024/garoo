@@ -247,6 +247,16 @@ export class DropboxStore implements Store {
     return { files, cursor: data.cursor ?? "", hasMore: !!data.has_more };
   }
 
+  /** Move a Dropbox file from one path to another (used by category reconcile). */
+  async moveFile(from: string, to: string): Promise<void> {
+    await this.rpcJson("/2/files/move_v2", { from_path: from, to_path: to });
+  }
+
+  /** Delete a Dropbox file (recoverable from Dropbox trash for 30 days). */
+  async deleteFile(path: string): Promise<void> {
+    await this.rpcJson("/2/files/delete_v2", { path });
+  }
+
   /** Download a Dropbox file's bytes by its path. */
   async downloadFile(path: string): Promise<ArrayBuffer> {
     const token = await this.accessToken();

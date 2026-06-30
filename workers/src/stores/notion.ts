@@ -92,6 +92,66 @@ export class NotionStore implements Store {
     }
   }
 
+  /**
+   * General reconcile: scan one page of the post DB and update any page whose
+   * Category select doesn't match D1 (the source of truth). Idempotent and
+   * re-runnable for any future drift. Paginate via the returned nextCursor.
+   * Empty/special D1 categories are left as-is (save() doesn't set Category
+   * for them).
+   */
+  async reconcileCategories(
+    d1: { getCategories(ids: string[], provider: string): Promise<Map<string, string>> },
+    cursor: string | undefined,
+    pageSize = 40
+  ): Promise<{ scanned: number; updated: number; hasMore: boolean; nextCursor?: string }> {
+    const res = await fetch(`${API}/databases/${this.postDB}/query`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(
+        cursor ? { page_size: pageSize, start_cursor: cursor } : { page_size: pageSize }
+      ),
+    });
+    if (!res.ok) {
+      throw new Error(`notion query failed (${res.status}): ${await res.text()}`);
+    }
+    const data = (await res.json()) as {
+      results?: Array<{ id: string; properties?: Record<string, any> }>;
+      has_more?: boolean;
+      next_cursor?: string | null;
+    };
+    const pages = (data.results ?? []).map((r) => {
+      const props = r.properties ?? {};
+      const idProp = props[P.postID]?.rich_text?.[0];
+      return {
+        pageId: r.id,
+        postId: idProp?.plain_text ?? idProp?.text?.content ?? "",
+        cat: props[P.postCategory]?.select?.name ?? "",
+      };
+    });
+    const ids = [...new Set(pages.map((p) => p.postId).filter((s) => s.length > 0))];
+    const d1cats = await d1.getCategories(ids, "twitter");
+
+    let updated = 0;
+    for (const p of pages) {
+      if (!p.postId) continue;
+      const d1cat = d1cats.get(p.postId);
+      if (d1cat === undefined || d1cat === "") continue; // not in D1 / special-empty
+      if (p.cat === d1cat) continue; // already correct
+      try {
+        await this.updatePage(p.pageId, { [P.postCategory]: { select: { name: d1cat } } });
+        updated++;
+      } catch (e) {
+        console.error(`notion reconcile failed for ${p.pageId}:`, e);
+      }
+    }
+    return {
+      scanned: pages.length,
+      updated,
+      hasMore: !!data.has_more,
+      nextCursor: data.next_cursor ?? undefined,
+    };
+  }
+
   // --- author ---
 
   private async getAuthor(author: Author): Promise<string | undefined> {

@@ -15,17 +15,25 @@ import {
 import * as x from "./providers/x";
 import { buildStores, backupD1ToDropbox, type Store } from "./stores";
 import { D1Store } from "./stores/d1";
+import { D1State } from "./stores/state";
 import { isText } from "./post";
 import { isCommand, processCommand } from "./commands";
 import { handleImport } from "./import";
 import { handleReconcile } from "./reconcile";
 
-const KV_LAST_MESSAGE_ID = "last_message_id";
+// Poll state lives in D1 (the `state` table via D1State), not KV: the poll lock
+// is written + deleted every cron minute, and KV's free tier only allows
+// 1000 writes+deletes/day — well under the 1440/day a per-minute cron needs.
+const STATE_LAST_MESSAGE_ID = "last_message_id";
+
+// Legacy KV key for the last processed message id, read once to seed D1 on the
+// first poll after migration (see runPoll). Removable after that first run.
+const KV_LAST_MESSAGE_ID_LEGACY = "last_message_id";
 
 // Single-flight lock so overlapping cron ticks don't double-process. TTL is the
 // crash backstop (auto-releases if a run dies before the finally); normal runs
 // release it immediately on completion.
-const KV_POLL_LOCK = "poll_lock";
+const STATE_POLL_LOCK = "poll_lock";
 const POLL_LOCK_TTL = 300;
 
 // Reaction added to the original post while importing, removed on completion.
@@ -111,25 +119,39 @@ async function pollDiscord(env: Env): Promise<PollResult> {
     return { status: "skipped", messagesFound: 0, processed: 0 };
   }
 
-  // Single-flight: skip if a previous poll is still running, so overlapping
-  // cron ticks can't re-read the same last_message_id and double-process.
-  if (await env.KV.get(KV_POLL_LOCK)) {
+  const state = D1State.fromEnv(env);
+  if (!state) {
+    // No D1 configured — nowhere to coordinate; run unlocked.
+    return runPoll(env, null);
+  }
+
+  // Single-flight: atomically acquire the lock and skip if another tick still
+  // holds it, so overlapping cron ticks can't re-read the same last_message_id
+  // and double-process.
+  if (!(await state.acquireLock(STATE_POLL_LOCK, POLL_LOCK_TTL))) {
     return { status: "locked", messagesFound: 0, processed: 0 };
   }
-  await env.KV.put(KV_POLL_LOCK, String(Date.now()), {
-    expirationTtl: POLL_LOCK_TTL,
-  });
 
   try {
-    return await runPoll(env);
+    return await runPoll(env, state);
   } finally {
-    await env.KV.delete(KV_POLL_LOCK);
+    await state.delete(STATE_POLL_LOCK);
   }
 }
 
-async function runPoll(env: Env): Promise<PollResult> {
-  // Get last processed message ID from KV
-  const lastMessageId = await env.KV.get(KV_LAST_MESSAGE_ID);
+async function runPoll(
+  env: Env,
+  state: D1State | null
+): Promise<PollResult> {
+  // Get last processed message ID from D1. On the first run after migrating off
+  // KV, D1 has no value yet — fall back to the old KV value once (a cheap read)
+  // so we resume where we left off instead of re-scanning recent messages. Once
+  // D1 is seeded below, this KV read never happens again. (Safe to delete the
+  // fallback, and the KV key, after the first successful poll.)
+  let lastMessageId = state ? await state.get(STATE_LAST_MESSAGE_ID) : null;
+  if (!lastMessageId) {
+    lastMessageId = await env.KV.get(KV_LAST_MESSAGE_ID_LEGACY);
+  }
 
   // Fetch new messages from Discord (token/channel checked by the caller)
   const messages = await fetchMessages(
@@ -197,7 +219,7 @@ async function runPoll(env: Env): Promise<PollResult> {
 
   // Save the newest message ID
   const newestMessageId = messages[0].id;
-  await env.KV.put(KV_LAST_MESSAGE_ID, newestMessageId);
+  if (state) await state.put(STATE_LAST_MESSAGE_ID, newestMessageId);
 
   // Back up D1 to Dropbox when at least one post was saved this cycle.
   if (saved > 0) {

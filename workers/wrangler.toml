@@ -8,7 +8,9 @@ compatibility_flags = ["nodejs_compat"]
 # which may be revived later. The active provider uses twitterapi.io instead.
 # browser = { binding = "BROWSER" }
 
-# KV namespace for storing state
+# KV namespace. Now only holds the Dropbox OAuth token (refreshed ~hourly, so a
+# handful of writes/day). Poll state (poll_lock, last_message_id) moved to D1 —
+# it was written every cron minute and blew past KV's 1000/day free write quota.
 kv_namespaces = [
   { binding = "KV", id = "66a7ac6bd06249ffbc707f632eae4f34" }
 ]
@@ -35,8 +37,10 @@ DEBUG = "false"
 # `wrangler secret put` — see Env in src/types.ts. No plaintext [vars] here so
 # they cannot clobber the secrets on deploy.
 
-# Cron trigger (every minute). Overlapping ticks are guarded by a KV
-# single-flight lock in pollDiscord, so a long run won't be double-processed.
+# Cron trigger (every minute). Overlapping ticks are guarded by a D1
+# single-flight lock in pollDiscord (see stores/state.ts), so a long run won't be
+# double-processed. The lock was moved off KV: writing + deleting it every minute
+# (1440+1440/day) exceeded KV's 1000/day free write/delete quota.
 [triggers]
 crons = ["* * * * *"]
 

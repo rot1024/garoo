@@ -36,9 +36,19 @@ const KV_LAST_MESSAGE_ID_LEGACY = "last_message_id";
 const STATE_POLL_LOCK = "poll_lock";
 const POLL_LOCK_TTL = 300;
 
-// Timestamp (unix ms) of the last successful D1→Dropbox backup. The backup dumps
-// the entire pictures table, so running it on every save is slow (~tens of
-// seconds) and grows unbounded; we throttle it to once per BACKUP_MIN_INTERVAL_MS.
+// Max seed posts handled per cron tick. Each save fans out to many external
+// fetches (twitterapi.io, Dropbox, Notion, Discord), and the free Workers plan
+// caps a single invocation at 50 subrequests. Processing a whole backlog in one
+// tick blew past that mid-loop: saves stopped, reactions/edits failed, and the
+// cursor advanced regardless — silently dropping the rest. Cap the work per tick
+// and drain backlogs across ticks instead. Lower this if subrequest errors recur.
+const MAX_POSTS_PER_TICK = 3;
+
+// D1→Dropbox backup. Disabled: it dumps the entire pictures table, which doesn't
+// fit the free plan's subrequest budget (it barely ever completed), so it needs
+// a different mechanism (e.g. a scheduled R2 export). Code is kept below and
+// gated on this flag so it can be revived once that lands.
+const BACKUP_ENABLED = false;
 const STATE_LAST_BACKUP = "last_backup_at";
 const BACKUP_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
 
@@ -217,9 +227,18 @@ async function runPoll(
 
   let processed = 0;
   let saved = 0;
+  let posts = 0; // seed posts handled this tick (subrequest budget)
+  // Advance the cursor only past messages we actually finished. If we stop early
+  // on the per-tick cap, the rest are re-fetched next tick — nothing is lost.
+  let cursorId: string | null = null;
+
   for (const message of sortedMessages) {
-    // Skip only our own replies (progress/outcome messages), not other bots.
-    if (selfId && message.author.id === selfId) continue;
+    // Skip only our own replies (progress/outcome messages), not other bots —
+    // but still move the cursor past them.
+    if (selfId && message.author.id === selfId) {
+      cursorId = message.id;
+      continue;
+    }
 
     const content = message.content ?? "";
 
@@ -227,12 +246,21 @@ async function runPoll(
     if (isCommand(content)) {
       await processCommand(content, env, message.id);
       processed++;
+      cursorId = message.id;
       continue;
     }
 
     // Extract seeds from message
     const seeds = extractSeeds(content);
-    if (seeds.length === 0) continue;
+    if (seeds.length === 0) {
+      cursorId = message.id;
+      continue;
+    }
+
+    // Stop before this post once the per-tick cap is reached, leaving the cursor
+    // where it is so the backlog drains over the next ticks (see the cap comment).
+    if (posts >= MAX_POSTS_PER_TICK) break;
+    posts++;
 
     const ch = env.DISCORD_CHANNEL_ID!;
     const token = env.DISCORD_BOT_TOKEN!;
@@ -260,14 +288,14 @@ async function runPoll(
         console.error("reaction failed:", e)
       );
     }
+
+    cursorId = message.id; // fully handled this post
   }
 
-  // Save the newest message ID
-  const newestMessageId = messages[0].id;
-  if (state) await state.put(STATE_LAST_MESSAGE_ID, newestMessageId);
+  if (state && cursorId) await state.put(STATE_LAST_MESSAGE_ID, cursorId);
 
-  // Back up D1 to Dropbox after a save, but throttled (see maybeBackupD1).
-  if (saved > 0) {
+  // D1→Dropbox backup after a save — currently disabled (see BACKUP_ENABLED).
+  if (saved > 0 && BACKUP_ENABLED) {
     await maybeBackupD1(env, state);
   }
 
@@ -275,7 +303,7 @@ async function runPoll(
     status: "ok",
     messagesFound: messages.length,
     processed,
-    lastMessageId: newestMessageId,
+    lastMessageId: cursorId ?? undefined,
   };
 }
 

@@ -13,7 +13,7 @@ import {
   type DiscordMessage,
 } from "./discord";
 import * as x from "./providers/x";
-import { buildStores, backupD1ToDropbox, type Store } from "./stores";
+import { buildStores, backupD1ToR2, type Store } from "./stores";
 import { D1Store } from "./stores/d1";
 import { D1State } from "./stores/state";
 import { isText } from "./post";
@@ -52,11 +52,10 @@ const MAX_SEEDS_PER_TICK = 3;
 // ticks without redoing or losing any.
 const STATE_RESUME = "resume_offset";
 
-// D1→Dropbox backup. Disabled: it dumps the entire pictures table, which doesn't
-// fit the free plan's subrequest budget (it barely ever completed), so it needs
-// a different mechanism (e.g. a scheduled R2 export). Code is kept below and
-// gated on this flag so it can be revived once that lands.
-const BACKUP_ENABLED = false;
+// D1 backup after a save, throttled to once per BACKUP_MIN_INTERVAL_MS. Targets
+// R2 (binding-to-binding, ~2 subrequests) — the old Dropbox dump didn't fit the
+// free plan's subrequest budget. Kill-switch: set false to disable.
+const BACKUP_ENABLED = true;
 const STATE_LAST_BACKUP = "last_backup_at";
 const BACKUP_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
 
@@ -358,11 +357,11 @@ async function runPoll(
 }
 
 /**
- * Back up the D1 pictures table to Dropbox, at most once per
- * BACKUP_MIN_INTERVAL_MS (tracked in D1 state). The dump scans the whole table,
- * so this keeps a heavy, ever-growing operation off the per-save critical path.
- * On failure we ping the owner on Discord instead of swallowing it — a silently
- * broken backup is exactly the kind of failure that went unnoticed before.
+ * Back up the D1 pictures table to R2, at most once per BACKUP_MIN_INTERVAL_MS
+ * (tracked in D1 state), so the whole-table dump stays off the per-save critical
+ * path. On failure we ping the owner on Discord instead of swallowing it — a
+ * silently broken backup is exactly the kind of failure that went unnoticed
+ * before.
  */
 async function maybeBackupD1(env: Env, state: D1State | null): Promise<void> {
   const now = Date.now();
@@ -370,17 +369,17 @@ async function maybeBackupD1(env: Env, state: D1State | null): Promise<void> {
   if (state && now - last < BACKUP_MIN_INTERVAL_MS) return;
 
   try {
-    await backupD1ToDropbox(env);
+    await backupD1ToR2(env);
     if (state) await state.put(STATE_LAST_BACKUP, String(now));
   } catch (e) {
-    console.error("D1 backup to Dropbox failed:", e);
+    console.error("D1 backup to R2 failed:", e);
     const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
     if (env.DISCORD_USER_ID) {
       const msg = e instanceof Error ? e.message : String(e);
       await notify(
         env,
         canNotify,
-        `<@${env.DISCORD_USER_ID}> ⚠️ D1→Dropbox backup failed: ${msg}`
+        `<@${env.DISCORD_USER_ID}> ⚠️ D1→R2 backup failed: ${msg}`
       );
     }
   }

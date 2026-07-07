@@ -43,8 +43,34 @@ export function buildStores(env: Env): Store[] {
 }
 
 /**
+ * Back up the D1 pictures table to R2 as a restorable SQL dump at
+ * <base>/_backup/garoo.sql. Uses the D1 and R2 bindings directly (~2
+ * subrequests, low CPU) — unlike the Dropbox backup below, whose chunked HTTP
+ * upload didn't fit the free plan's 50-subrequest budget. Overwrites the single
+ * latest snapshot; D1 Time Travel covers point-in-time recovery (7 days on the
+ * free plan). Restore with: download the object, then `wrangler d1 execute
+ * garoo --remote --file=garoo.sql`. No-op unless both D1 and R2 are configured.
+ */
+export async function backupD1ToR2(env: Env): Promise<void> {
+  const d1 = D1Store.fromEnv(env);
+  if (!d1 || !env.R2) return;
+
+  const base = (env.DROPBOX_BASE_DIR ?? "").replace(/^\/+|\/+$/g, "");
+  const key = [base, "_backup", "garoo.sql"]
+    .filter((s) => s.length > 0)
+    .join("/");
+  const sql = await d1.exportDump();
+  await env.R2.put(key, sql, {
+    httpMetadata: { contentType: "application/sql" },
+  });
+  console.log(`r2: backup saved ${key} (${sql.length} bytes)`);
+}
+
+/**
  * Back up the D1 pictures table to Dropbox (<base_dir>/_backup/garoo.sql).
- * No-op unless both the D1 and Dropbox stores are configured.
+ * Superseded by backupD1ToR2 (the whole-table dump's chunked Dropbox upload
+ * didn't fit the free plan's subrequest budget); kept for reference / a future
+ * off-site backup path. No-op unless both the D1 and Dropbox stores are configured.
  */
 export async function backupD1ToDropbox(env: Env): Promise<void> {
   const d1 = D1Store.fromEnv(env);

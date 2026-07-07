@@ -36,12 +36,37 @@ const KV_LAST_MESSAGE_ID_LEGACY = "last_message_id";
 const STATE_POLL_LOCK = "poll_lock";
 const POLL_LOCK_TTL = 300;
 
+// Timestamp (unix ms) of the last successful D1→Dropbox backup. The backup dumps
+// the entire pictures table, so running it on every save is slow (~tens of
+// seconds) and grows unbounded; we throttle it to once per BACKUP_MIN_INTERVAL_MS.
+const STATE_LAST_BACKUP = "last_backup_at";
+const BACKUP_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
+
 // Reaction added to the original post while importing, removed on completion.
 const IMPORTING = "⬇️";
 
 /** Whether unauthenticated HTTP action endpoints are exposed (debug/admin). */
 function isDebug(env: Env): boolean {
   return env.DEBUG === "true" || env.DEBUG === "1";
+}
+
+/**
+ * The bot's own user id, decoded from the first segment of its token (Discord
+ * encodes the user id there as base64). Used to skip only our own reply
+ * messages while still processing other bot-flagged authors (e.g. the
+ * "garoo from mobile" poster). Returns null if the token can't be decoded, in
+ * which case we skip nothing extra — our own replies carry no seed URL, so
+ * they're dropped by extractSeeds anyway.
+ */
+function selfBotId(token: string): string | null {
+  try {
+    let b = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/");
+    while (b.length % 4) b += "=";
+    const id = atob(b);
+    return /^\d+$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 export default {
@@ -103,7 +128,20 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    ctx.waitUntil(pollDiscord(env));
+    ctx.waitUntil(
+      // Top-level guard: a throw anywhere in the poll before the per-seed
+      // try/catch (a failed Discord fetch, store setup, D1 state access, …)
+      // would otherwise be swallowed by waitUntil with zero visibility — the
+      // exact "silent failure, nothing in Discord" symptom. Log the outcome and
+      // any error so they show in `wrangler tail` / Workers Logs.
+      pollDiscord(env)
+        .then((r) => {
+          if (r.status !== "no_new_messages" && r.status !== "locked") {
+            console.log("poll:", JSON.stringify(r));
+          }
+        })
+        .catch((e) => console.error("poll failed:", e))
+    );
   },
 };
 
@@ -170,11 +208,18 @@ async function runPoll(
 
   const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
 
+  // Our own bot user id, so we skip only *our* progress/outcome replies. We must
+  // NOT skip every bot-authored message: posts arrive via "garoo from mobile",
+  // which Discord flags as a bot, so a blanket `author.bot` skip silently
+  // dropped every archival request (no save, no reaction) while the cursor
+  // advanced past them. Derived from the token (no extra config/API call).
+  const selfId = selfBotId(env.DISCORD_BOT_TOKEN!);
+
   let processed = 0;
   let saved = 0;
   for (const message of sortedMessages) {
-    // Skip bot messages
-    if (message.author.bot) continue;
+    // Skip only our own replies (progress/outcome messages), not other bots.
+    if (selfId && message.author.id === selfId) continue;
 
     const content = message.content ?? "";
 
@@ -221,13 +266,9 @@ async function runPoll(
   const newestMessageId = messages[0].id;
   if (state) await state.put(STATE_LAST_MESSAGE_ID, newestMessageId);
 
-  // Back up D1 to Dropbox when at least one post was saved this cycle.
+  // Back up D1 to Dropbox after a save, but throttled (see maybeBackupD1).
   if (saved > 0) {
-    try {
-      await backupD1ToDropbox(env);
-    } catch (e) {
-      console.error("D1 backup to Dropbox failed:", e);
-    }
+    await maybeBackupD1(env, state);
   }
 
   return {
@@ -236,6 +277,35 @@ async function runPoll(
     processed,
     lastMessageId: newestMessageId,
   };
+}
+
+/**
+ * Back up the D1 pictures table to Dropbox, at most once per
+ * BACKUP_MIN_INTERVAL_MS (tracked in D1 state). The dump scans the whole table,
+ * so this keeps a heavy, ever-growing operation off the per-save critical path.
+ * On failure we ping the owner on Discord instead of swallowing it — a silently
+ * broken backup is exactly the kind of failure that went unnoticed before.
+ */
+async function maybeBackupD1(env: Env, state: D1State | null): Promise<void> {
+  const now = Date.now();
+  const last = state ? Number((await state.get(STATE_LAST_BACKUP)) ?? 0) : 0;
+  if (state && now - last < BACKUP_MIN_INTERVAL_MS) return;
+
+  try {
+    await backupD1ToDropbox(env);
+    if (state) await state.put(STATE_LAST_BACKUP, String(now));
+  } catch (e) {
+    console.error("D1 backup to Dropbox failed:", e);
+    const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
+    if (env.DISCORD_USER_ID) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await notify(
+        env,
+        canNotify,
+        `<@${env.DISCORD_USER_ID}> ⚠️ D1→Dropbox backup failed: ${msg}`
+      );
+    }
+  }
 }
 
 interface SeedResult {

@@ -36,13 +36,21 @@ const KV_LAST_MESSAGE_ID_LEGACY = "last_message_id";
 const STATE_POLL_LOCK = "poll_lock";
 const POLL_LOCK_TTL = 300;
 
-// Max seed posts handled per cron tick. Each save fans out to many external
+// Max seed URLs handled per cron tick. Each save fans out to many external
 // fetches (twitterapi.io, Dropbox, Notion, Discord), and the free Workers plan
-// caps a single invocation at 50 subrequests. Processing a whole backlog in one
-// tick blew past that mid-loop: saves stopped, reactions/edits failed, and the
-// cursor advanced regardless — silently dropping the rest. Cap the work per tick
-// and drain backlogs across ticks instead. Lower this if subrequest errors recur.
-const MAX_POSTS_PER_TICK = 3;
+// caps a single invocation at 50 subrequests (~10 per URL). Draining more than
+// this in one tick blew past that mid-loop: saves stopped, reactions/edits
+// failed, and the cursor advanced regardless — silently dropping the rest. Cap
+// the URLs per tick and drain the rest across ticks. Lower this if subrequest
+// errors recur. This counts URLs, not messages, so one message with many URLs is
+// itself split across ticks (see STATE_RESUME).
+const MAX_SEEDS_PER_TICK = 3;
+
+// Resume marker for a message whose URLs didn't all fit in one tick's budget:
+// "<messageId>:<seedsDone>". The cursor is held before that message and we resume
+// from the offset next tick, so a single message with many URLs drains across
+// ticks without redoing or losing any.
+const STATE_RESUME = "resume_offset";
 
 // D1→Dropbox backup. Disabled: it dumps the entire pictures table, which doesn't
 // fit the free plan's subrequest budget (it barely ever completed), so it needs
@@ -225,12 +233,23 @@ async function runPoll(
   // advanced past them. Derived from the token (no extra config/API call).
   const selfId = selfBotId(env.DISCORD_BOT_TOKEN!);
 
+  // Resume point if a previous tick couldn't finish one message's URLs.
+  let resumeMsgId: string | null = null;
+  let resumeOffset = 0;
+  if (state) {
+    const raw = await state.get(STATE_RESUME);
+    if (raw) {
+      const i = raw.lastIndexOf(":");
+      resumeMsgId = raw.slice(0, i);
+      resumeOffset = Number(raw.slice(i + 1)) || 0;
+    }
+  }
+
   let processed = 0;
   let saved = 0;
-  let posts = 0; // seed posts handled this tick (subrequest budget)
-  // Advance the cursor only past messages we actually finished. If we stop early
-  // on the per-tick cap, the rest are re-fetched next tick — nothing is lost.
-  let cursorId: string | null = null;
+  let budget = MAX_SEEDS_PER_TICK; // URLs we may process this tick
+  let cursorId: string | null = null; // advance only past finished messages
+  let newResume: string | null = null; // a partial message carried to next tick
 
   for (const message of sortedMessages) {
     // Skip only our own replies (progress/outcome messages), not other bots —
@@ -257,26 +276,53 @@ async function runPoll(
       continue;
     }
 
-    // Stop before this post once the per-tick cap is reached, leaving the cursor
-    // where it is so the backlog drains over the next ticks (see the cap comment).
-    if (posts >= MAX_POSTS_PER_TICK) break;
-    posts++;
+    // Start from the resume offset if we're picking this message back up.
+    const start = message.id === resumeMsgId ? resumeOffset : 0;
+    if (start >= seeds.length) {
+      cursorId = message.id; // stale/complete — nothing left to do
+      continue;
+    }
+
+    // Out of budget: stop here, leaving the cursor before this message so it's
+    // re-fetched next tick (preserving its resume offset if any).
+    if (budget <= 0) {
+      newResume = start > 0 ? `${message.id}:${start}` : null;
+      break;
+    }
 
     const ch = env.DISCORD_CHANNEL_ID!;
     const token = env.DISCORD_BOT_TOKEN!;
 
-    // Importing: mark the original post while we work.
-    if (canNotify) {
+    // Mark in-progress the first time we touch this message.
+    if (canNotify && start === 0) {
       await addReaction(token, ch, message.id, IMPORTING).catch((e) =>
         console.error("reaction failed:", e)
       );
     }
 
-    const results = await processSeeds(seeds, env, stores, message.id);
+    // Process only as many URLs as the remaining budget allows.
+    const take = Math.min(seeds.length - start, budget);
+    const results = await processSeeds(
+      seeds,
+      env,
+      stores,
+      message.id,
+      start,
+      take
+    );
     saved += results.filter((r) => r.post && !r.skipped).length;
-    processed++;
+    budget -= take;
+    const done = start + take;
 
-    // Done: remove the importing mark and react with the outcome.
+    if (done < seeds.length) {
+      // Budget ran out mid-message: resume from here next tick, keep the cursor
+      // before it, leave the ⬇️ mark on, and stop.
+      newResume = `${message.id}:${done}`;
+      break;
+    }
+
+    // Message fully handled: outcome reaction + advance the cursor past it.
+    processed++;
     if (canNotify) {
       await removeReaction(token, ch, message.id, IMPORTING).catch(() => {});
       const emoji = results.some((r) => r.error)
@@ -288,11 +334,15 @@ async function runPoll(
         console.error("reaction failed:", e)
       );
     }
-
-    cursorId = message.id; // fully handled this post
+    cursorId = message.id;
   }
 
-  if (state && cursorId) await state.put(STATE_LAST_MESSAGE_ID, cursorId);
+  // Persist the cursor and the resume marker (cleared when nothing is pending).
+  if (state) {
+    if (cursorId) await state.put(STATE_LAST_MESSAGE_ID, cursorId);
+    if (newResume) await state.put(STATE_RESUME, newResume);
+    else await state.delete(STATE_RESUME);
+  }
 
   // D1→Dropbox backup after a save — currently disabled (see BACKUP_ENABLED).
   if (saved > 0 && BACKUP_ENABLED) {
@@ -354,12 +404,18 @@ async function processSeeds(
   seeds: Seed[],
   env: Env,
   stores: Store[],
-  replyTo?: string
+  replyTo?: string,
+  startIndex = 0,
+  maxCount = seeds.length
 ): Promise<SeedResult[]> {
   const canNotify = !!(env.DISCORD_BOT_TOKEN && env.DISCORD_CHANNEL_ID);
   const results: SeedResult[] = [];
+  const end = Math.min(seeds.length, startIndex + maxCount);
 
-  for (let i = 0; i < seeds.length; i++) {
+  // Process the seeds[startIndex, end) slice; the caller feeds successive slices
+  // across ticks to stay under the subrequest budget. index/total below stay
+  // absolute (e.g. "4/10") so the progress lines are consistent across ticks.
+  for (let i = startIndex; i < end; i++) {
     const seed = seeds[i];
     const index = i + 1;
     const total = seeds.length;

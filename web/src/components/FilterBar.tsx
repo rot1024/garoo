@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Tag, FolderOpen, ArrowDownUp, AtSign, Shapes, Shuffle } from "lucide-react";
+import { Search, Tag, FolderOpen, ArrowDownUp, AtSign, Shapes, Shuffle, Globe } from "lucide-react";
 import type { Facets, SortMode } from "@/lib/api";
+import { providerLabel } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -100,6 +101,12 @@ export default function FilterBar({
       count: a.n,
       image: a.avatar, // always defined for authors -> Avatar shows a grey fallback if empty
     })) ?? [];
+  const providerOptions =
+    facets?.providers.map((p) => ({
+      value: p.provider,
+      label: providerLabel(p.provider),
+      count: p.n,
+    })) ?? [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -151,6 +158,13 @@ export default function FilterBar({
         selected={filters.authors}
         onChange={(authors) => onChange({ authors })}
         searchPlaceholder="名前・@IDで検索"
+      />
+      <MultiSelectFilter
+        label="プロバイダ"
+        icon={<Globe className="h-3.5 w-3.5" />}
+        options={providerOptions}
+        selected={filters.providers}
+        onChange={(providers) => onChange({ providers })}
       />
 
       {/* Sort — picking ランダム mints a seed so paging stays consistent. */}

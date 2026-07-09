@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Moon, Sun, Monitor, Globe, ImageOff } from "lucide-react";
+import { Loader2, Moon, Sun, Monitor, SlidersHorizontal, ImageOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AuthContext } from "@/App";
 import {
   getFacets,
@@ -24,8 +25,6 @@ import FilterBar, {
   type Filters,
   type MediaType,
 } from "@/components/FilterBar";
-import MultiSelectFilter from "@/components/MultiSelectFilter";
-import { providerLabel } from "@/lib/format";
 
 const PAGE_SIZE = 40;
 
@@ -88,6 +87,17 @@ export default function Gallery() {
   const filters = filtersFromParams(searchParams);
   // Serialize filters to a stable key so the fetch effect reruns on any change.
   const filterKey = paramsFromFilters(filters).toString();
+
+  // Mobile: the filter controls are collapsed behind a toggle so the header
+  // doesn't grow tall. On lg+ they're always shown inline.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilters =
+    filters.categories.length +
+    filters.tags.length +
+    filters.providers.length +
+    filters.authors.length +
+    (filters.q ? 1 : 0) +
+    (sameSet(filters.mediaTypes, DEFAULT_MEDIA_TYPES) ? 0 : 1);
 
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   useEffect(() => applyTheme(theme), [theme]);
@@ -196,16 +206,10 @@ export default function Gallery() {
   // Ordered id list handed to each card so the detail modal can page prev/next.
   const navList = items.map((p) => ({ provider: p.provider, id: p.id }));
 
-  const providerOptions = (facets?.providers ?? []).map((p) => ({
-    value: p.provider,
-    label: providerLabel(p.provider),
-    count: p.n,
-  }));
-
   return (
     <div className="min-h-screen">
-      {/* Sticky header. One row on wide screens (title | filters | actions);
-          wraps to two rows below `lg` (title+actions, then filters). */}
+      {/* Sticky header. One row on wide screens (title | filters | actions). On
+          mobile the filters collapse behind a toggle so the header stays short. */}
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
           {/* Title doubles as home / clear-all: clicking it resets the filters. */}
@@ -223,17 +227,23 @@ export default function Gallery() {
             </span>
           </div>
 
-          {/* Actions: on the first row's right below lg; trailing on lg.
-              Provider is a rarely-used filter, so it lives here as an icon. */}
+          {/* Actions: mobile filter toggle (lg:hidden) + theme. */}
           <div className="ml-auto flex shrink-0 items-center gap-1 lg:order-3 lg:ml-0">
-            <MultiSelectFilter
-              iconOnly
-              label="プロバイダ"
-              icon={<Globe className="h-4 w-4" />}
-              options={providerOptions}
-              selected={filters.providers}
-              onChange={(providers) => patchFilters({ providers })}
-            />
+            <Button
+              variant={filtersOpen ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-label="フィルター"
+              aria-expanded={filtersOpen}
+              className="relative lg:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {activeFilters > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                  {activeFilters}
+                </span>
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -251,8 +261,13 @@ export default function Gallery() {
             </Button>
           </div>
 
-          {/* Filters: full-width second row below lg; flexible middle on lg */}
-          <div className="w-full min-w-0 lg:order-2 lg:w-auto lg:flex-1">
+          {/* Filters: collapsible full-width row on mobile, flexible middle on lg. */}
+          <div
+            className={cn(
+              "w-full min-w-0 lg:order-2 lg:block lg:w-auto lg:flex-1",
+              filtersOpen ? "block" : "hidden"
+            )}
+          >
             <FilterBar filters={filters} facets={facets} onChange={patchFilters} />
           </div>
         </div>

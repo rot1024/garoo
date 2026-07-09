@@ -47,7 +47,7 @@ export interface ListParams {
   tags?: string[];
   providers?: string[];
   authors?: string[];
-  media?: "all" | "photo" | "video";
+  mediaTypes?: string[]; // subset of image|video|none (sent as one `mediaset` param)
   q?: string | null;
   limit?: number;
 }
@@ -118,7 +118,9 @@ export function listPictures(params: ListParams): Promise<ListResult> {
   for (const t of params.tags ?? []) q.append("tag", t);
   for (const p of params.providers ?? []) q.append("provider", p);
   for (const a of params.authors ?? []) q.append("author", a);
-  if (params.media && params.media !== "all") q.set("media", params.media);
+  // mediaset is always sent (even empty = show nothing) so the server can tell
+  // an explicit selection from an absent param (which defaults to image+video).
+  if (params.mediaTypes) q.set("mediaset", params.mediaTypes.join(","));
   if (params.q) q.set("q", params.q);
   if (params.limit) q.set("limit", String(params.limit));
   return request<ListResult>(`/api/pictures?${q.toString()}`);

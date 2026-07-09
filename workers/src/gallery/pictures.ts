@@ -215,10 +215,21 @@ export async function handleList(url: URL, env: Env): Promise<Response> {
     binds.push(...authors.map((a) => a.toLowerCase()));
   }
 
-  const media = url.searchParams.get("media");
-  if (media === "video") where.push("media_url LIKE '%.mp4%'");
-  else if (media === "photo")
-    where.push("media_url != '' AND media_url NOT LIKE '%.mp4%'");
+  // Media-type filter. `mediaset` is a comma list of image|video|none. Absent
+  // (old links) defaults to image+video (has media). Present -> OR the selected
+  // conditions; present-but-empty -> match nothing.
+  const mediaset = url.searchParams.get("mediaset");
+  if (mediaset === null) {
+    where.push("media_url != ''");
+  } else {
+    const types = mediaset.split(",");
+    const conds: string[] = [];
+    if (types.includes("image"))
+      conds.push("(media_url != '' AND media_url NOT LIKE '%.mp4%')");
+    if (types.includes("video")) conds.push("media_url LIKE '%.mp4%'");
+    if (types.includes("none")) conds.push("media_url = ''");
+    where.push(conds.length ? `(${conds.join(" OR ")})` : "1=0");
+  }
 
   const q = url.searchParams.get("q");
   if (q) {

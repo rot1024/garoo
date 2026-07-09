@@ -12,10 +12,13 @@ import {
 } from "@/components/ui/select";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 
+export type MediaType = "image" | "video" | "none";
+export const DEFAULT_MEDIA_TYPES: MediaType[] = ["image", "video"];
+
 export interface Filters {
   q: string;
   sort: SortMode;
-  media: "all" | "photo" | "video";
+  mediaTypes: MediaType[]; // which kinds to show (default: image + video)
   categories: string[];
   tags: string[];
   providers: string[];
@@ -26,7 +29,7 @@ export interface Filters {
 export const EMPTY_FILTERS: Filters = {
   q: "",
   sort: "newest",
-  media: "all",
+  mediaTypes: [...DEFAULT_MEDIA_TYPES],
   categories: [],
   tags: [],
   providers: [],
@@ -47,10 +50,10 @@ function newSeed(): string {
   return String(Math.floor(Math.random() * 2147483647) + 1);
 }
 
-const MEDIA_OPTIONS: { value: Filters["media"]; label: string }[] = [
-  { value: "all", label: "すべて" },
-  { value: "photo", label: "写真" },
+const MEDIA_OPTIONS: { value: MediaType; label: string }[] = [
+  { value: "image", label: "画像" },
   { value: "video", label: "動画" },
+  { value: "none", label: "メディアなし" },
 ];
 
 export default function FilterBar({
@@ -116,26 +119,15 @@ export default function FilterBar({
         />
       </div>
 
-      {/* Media type ("種類") — icon + label to match the other filters; shows the
-          title when unfiltered (all), the chosen kind otherwise. */}
-      <Select
-        value={filters.media}
-        onValueChange={(v) => onChange({ media: v as Filters["media"] })}
-      >
-        <SelectTrigger className="w-auto gap-1.5" aria-label="種類">
-          <Shapes className="h-3.5 w-3.5" />
-          {filters.media === "all"
-            ? "種類"
-            : MEDIA_OPTIONS.find((o) => o.value === filters.media)?.label}
-        </SelectTrigger>
-        <SelectContent>
-          {MEDIA_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Media type ("種類") — a checklist like the others (画像 / 動画 / メディアなし).
+          Default shows 画像 + 動画; check メディアなし to include text posts. */}
+      <MultiSelectFilter
+        label="種類"
+        icon={<Shapes className="h-3.5 w-3.5" />}
+        options={MEDIA_OPTIONS}
+        selected={filters.mediaTypes}
+        onChange={(v) => onChange({ mediaTypes: v as MediaType[] })}
+      />
 
       {/* Category / tag / provider checklists — toggled here, no separate chips */}
       <MultiSelectFilter

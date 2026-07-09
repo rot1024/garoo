@@ -112,8 +112,10 @@ export default function MultiSelectFilter({
           <Button
             variant="outline"
             size="sm"
+            // Transparent by default (matches the Select triggers over the
+            // blurred header); a faint fill only when something is selected.
             className={cn(
-              "gap-1.5",
+              "gap-1.5 bg-transparent",
               selected.length > 0 && "border-primary/60 bg-primary/5"
             )}
           >

@@ -19,7 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import Masonry from "@/components/Masonry";
 import PictureCard from "@/components/PictureCard";
-import FilterBar, { type Filters } from "@/components/FilterBar";
+import FilterBar, {
+  DEFAULT_MEDIA_TYPES,
+  type Filters,
+  type MediaType,
+} from "@/components/FilterBar";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 import { providerLabel } from "@/lib/format";
 
@@ -33,6 +37,21 @@ const SORT_VALUES = [
   "random",
 ] as const;
 
+const MEDIA_VALUES: MediaType[] = ["image", "video", "none"];
+
+// `mediaset` absent (old links / default) -> image+video; present (even empty
+// = show nothing) -> exactly that selection.
+function parseMediaset(raw: string | null): MediaType[] {
+  if (raw === null) return [...DEFAULT_MEDIA_TYPES];
+  return raw.split(",").filter((v): v is MediaType =>
+    (MEDIA_VALUES as string[]).includes(v)
+  );
+}
+
+function sameSet(a: string[], b: string[]): boolean {
+  return a.length === b.length && [...a].sort().join() === [...b].sort().join();
+}
+
 function filtersFromParams(sp: URLSearchParams): Filters {
   const sort = sp.get("sort") ?? "newest";
   return {
@@ -40,10 +59,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     sort: (SORT_VALUES as readonly string[]).includes(sort)
       ? (sort as Filters["sort"])
       : "newest",
-    media:
-      sp.get("media") === "photo" || sp.get("media") === "video"
-        ? (sp.get("media") as Filters["media"])
-        : "all",
+    mediaTypes: parseMediaset(sp.get("mediaset")),
     categories: sp.getAll("category"),
     tags: sp.getAll("tag"),
     providers: sp.getAll("provider"),
@@ -56,7 +72,8 @@ function paramsFromFilters(f: Filters): URLSearchParams {
   const sp = new URLSearchParams();
   if (f.q) sp.set("q", f.q);
   if (f.sort !== "newest") sp.set("sort", f.sort);
-  if (f.media !== "all") sp.set("media", f.media);
+  if (!sameSet(f.mediaTypes, DEFAULT_MEDIA_TYPES))
+    sp.set("mediaset", f.mediaTypes.join(","));
   for (const c of f.categories) sp.append("category", c);
   for (const t of f.tags) sp.append("tag", t);
   for (const p of f.providers) sp.append("provider", p);
@@ -125,7 +142,7 @@ export default function Gallery() {
         const res = await listPictures({
           sort: filters.sort,
           seed: filters.seed || null,
-          media: filters.media,
+          mediaTypes: filters.mediaTypes,
           categories: filters.categories,
           tags: filters.tags,
           providers: filters.providers,
@@ -148,7 +165,7 @@ export default function Gallery() {
         }
       }
     },
-    [auth, filters.sort, filters.seed, filters.media, filters.categories, filters.tags, filters.providers, filters.authors, filters.q]
+    [auth, filters.sort, filters.seed, filters.mediaTypes, filters.categories, filters.tags, filters.providers, filters.authors, filters.q]
   );
 
   // Reset + load first page whenever the filters change.

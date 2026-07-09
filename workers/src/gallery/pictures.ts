@@ -69,10 +69,23 @@ function splitTags(label: string | null): string[] {
 
 /** Reconstruct the R2 media keys for a row (empty when the post has no media). */
 function reconstructMedia(row: Row, base: string): MediaDTO[] {
-  const urls = (row.media_url ?? "").split(",").filter(Boolean);
-  if (urls.length === 0) return [];
   const screenname = (row.user_screenname ?? "").toLowerCase();
   const category = normCategory(row.category ?? undefined);
+
+  // Legacy imports have NULL media_url/count but a single <name>.jpg in R2 (the
+  // old Go app didn't record media URLs). Reconstruct that single .jpg. A new
+  // media-less text post is stored with media_url = '' (empty, not NULL), so we
+  // can tell the two apart. (~13% of legacy posts aren't .jpg / have malformed
+  // ids and will 404 — the card shows a fallback for those.)
+  if (row.media_url === null || row.media_url === undefined) {
+    const name = mediaFilename(row.id, ".jpg", 0, 1, screenname);
+    return [
+      { key: r2Key(base, row.provider, category, screenname, name), type: "photo", index: 0 },
+    ];
+  }
+
+  const urls = row.media_url.split(",").filter(Boolean);
+  if (urls.length === 0) return [];
   return urls.map((u, i) => {
     const name = mediaFilename(row.id, u, i, urls.length, screenname);
     return {
@@ -84,6 +97,7 @@ function reconstructMedia(row: Row, base: string): MediaDTO[] {
 }
 
 function rowToDto(row: Row, base: string): PictureDTO {
+  const media = reconstructMedia(row, base);
   return {
     pictureId: row.picture_id,
     id: row.id,
@@ -98,8 +112,8 @@ function rowToDto(row: Row, base: string): PictureDTO {
     tags: splitTags(row.label),
     createdAt: row.created_at ?? "",
     registeredAt: row.registered_at ?? "",
-    count: row.count ?? 0,
-    media: reconstructMedia(row, base),
+    count: row.count ?? media.length,
+    media,
     // Cursor keys off whichever sort key the list query computed (_sortkey);
     // falls back to created_at for single-item fetches that don't select it.
     cursor: encodeCursor(
@@ -192,10 +206,18 @@ export async function handleList(url: URL, env: Env): Promise<Response> {
   const where: string[] = [];
   const binds: unknown[] = [];
 
-  const categories = url.searchParams.getAll("category").filter(Boolean);
+  // Category filter. Keep the empty value ("" = uncategorized) — it must not be
+  // dropped, and it matches both '' and NULL categories (the facet groups them).
+  const categories = url.searchParams.getAll("category");
   if (categories.length) {
-    where.push(`category IN (${categories.map(() => "?").join(",")})`);
-    binds.push(...categories);
+    const named = categories.filter((c) => c !== "");
+    const conds: string[] = [];
+    if (named.length) {
+      conds.push(`category IN (${named.map(() => "?").join(",")})`);
+      binds.push(...named);
+    }
+    if (categories.includes("")) conds.push("(category IS NULL OR category = '')");
+    where.push(`(${conds.join(" OR ")})`);
   }
 
   for (const tag of url.searchParams.getAll("tag").filter(Boolean)) {
@@ -221,14 +243,16 @@ export async function handleList(url: URL, env: Env): Promise<Response> {
   // Media-type filter. `mediaset` is a comma list of image|video|none. Absent
   // (old links) defaults to image+video (has media). Present -> OR the selected
   // conditions; present-but-empty -> match nothing.
+  //   NULL media_url = legacy import treated as a single image (see
+  //   reconstructMedia); '' = a genuine media-less/text post (= "none").
+  const HAS_IMAGE = "(media_url IS NULL OR (media_url != '' AND media_url NOT LIKE '%.mp4%'))";
   const mediaset = url.searchParams.get("mediaset");
   if (mediaset === null) {
-    where.push("media_url != ''");
+    where.push("(media_url IS NULL OR media_url != '')");
   } else {
     const types = mediaset.split(",");
     const conds: string[] = [];
-    if (types.includes("image"))
-      conds.push("(media_url != '' AND media_url NOT LIKE '%.mp4%')");
+    if (types.includes("image")) conds.push(HAS_IMAGE);
     if (types.includes("video")) conds.push("media_url LIKE '%.mp4%'");
     if (types.includes("none")) conds.push("media_url = ''");
     where.push(conds.length ? `(${conds.join(" OR ")})` : "1=0");

@@ -18,7 +18,13 @@ const MAX_AGE = 180 * 24 * 60 * 60; // 180 days
 export function json(data: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...headers },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      // Dynamic, per-request data (list/facets change as posts are edited) — must
+      // not be edge/browser cached, or filters return stale results.
+      "cache-control": "no-store",
+      ...headers,
+    },
   });
 }
 

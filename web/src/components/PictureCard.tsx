@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Play, Layers } from "lucide-react";
+import { Play, Layers, ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mediaUrl, type Picture } from "@/lib/api";
 import { hueFromString, stripTcoLinks } from "@/lib/format";
@@ -35,6 +35,7 @@ export default function PictureCard({
   const first = picture.media[0];
   const isVideo = first?.type === "video";
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
   // Reserve the real ratio if we've seen this media before, else the default.
   const [ratio, setRatio] = useState<number>(
     () => (first && aspectCache.get(first.key)) || DEFAULT_RATIO
@@ -45,6 +46,12 @@ export default function PictureCard({
       aspectCache.set(first.key, r);
       setRatio(r);
     }
+    setLoaded(true);
+  };
+  // Some legacy posts guess the wrong extension and 404 — stop the skeleton and
+  // show a neutral placeholder instead of pulsing forever / a broken icon.
+  const onMediaError = () => {
+    setFailed(true);
     setLoaded(true);
   };
   const linkProps = {
@@ -98,7 +105,14 @@ export default function PictureCard({
         )}
         style={{ aspectRatio: ratio }}
       >
-        {isVideo ? (
+        {failed ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
+            <ImageOff className="h-6 w-6" />
+            <span className="max-w-full truncate px-2 text-xs">
+              @{picture.screenName}
+            </span>
+          </div>
+        ) : isVideo ? (
           <video
             src={mediaUrl(first.key)}
             muted
@@ -107,6 +121,7 @@ export default function PictureCard({
             onLoadedMetadata={(e) =>
               onMediaLoad(e.currentTarget.videoWidth, e.currentTarget.videoHeight)
             }
+            onError={onMediaError}
             className={cn(
               "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
               loaded ? "opacity-100" : "opacity-0"
@@ -121,6 +136,7 @@ export default function PictureCard({
             onLoad={(e) =>
               onMediaLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
             }
+            onError={onMediaError}
             className={cn(
               "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
               loaded ? "opacity-100" : "opacity-0"

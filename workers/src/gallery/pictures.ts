@@ -33,6 +33,7 @@ interface Row {
   count: number | null;
   media_url: string | null;
   user_avatar_url: string | null;
+  registered_at: string | null;
   _sortkey?: string | number | null; // computed sort key (list query only)
 }
 
@@ -55,6 +56,7 @@ interface PictureDTO {
   category: string;
   tags: string[];
   createdAt: string;
+  registeredAt: string; // when garoo saved it (UTC); "" for pre-existing rows
   count: number;
   media: MediaDTO[];
   cursor: string;
@@ -95,6 +97,7 @@ function rowToDto(row: Row, base: string): PictureDTO {
     category: row.category ?? "",
     tags: splitTags(row.label),
     createdAt: row.created_at ?? "",
+    registeredAt: row.registered_at ?? "",
     count: row.count ?? 0,
     media: reconstructMedia(row, base),
     // Cursor keys off whichever sort key the list query computed (_sortkey);

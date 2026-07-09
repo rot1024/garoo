@@ -461,6 +461,14 @@ function Body({
             )}
           </div>
 
+          {/* Registration: the actual date if recorded, else the order (#id) as
+              a fallback for posts saved before we tracked the timestamp. */}
+          <div className="text-xs text-muted-foreground">
+            {picture.registeredAt
+              ? `登録日 ${formatDate(picture.registeredAt)}`
+              : `登録順 #${picture.pictureId}`}
+          </div>
+
           {stripTcoLinks(picture.description) && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
               {stripTcoLinks(picture.description)}

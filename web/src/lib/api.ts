@@ -20,6 +20,7 @@ export interface Picture {
   category: string;
   tags: string[];
   createdAt: string;
+  registeredAt: string; // when garoo saved it; "" for pre-existing rows
   count: number;
   media: MediaRef[];
   cursor: string;

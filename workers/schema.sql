@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS pictures (
   count INTEGER,
   media_url TEXT,
   user_avatar_url TEXT,
+  registered_at TEXT,          -- when garoo first saved this post (UTC); NULL for pre-existing rows
   UNIQUE(id, provider)
 );
 

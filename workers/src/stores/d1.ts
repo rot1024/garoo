@@ -16,6 +16,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS pictures (
   count INTEGER,
   media_url TEXT,
   user_avatar_url TEXT,
+  registered_at TEXT,
   UNIQUE(id, provider)
 );`;
 
@@ -36,11 +37,26 @@ export class D1Store implements Store {
     const mediaUrls = (post.media ?? []).map((m) => m.url).join(",");
     const label = post.tags?.length ? post.tags.join(" ") : "";
 
+    // Upsert (was REPLACE): ON CONFLICT preserves the original picture_id and
+    // registered_at on re-processing, so registration order/time stays stable.
+    // registered_at is stamped (UTC) only on first insert.
     await this.db
       .prepare(
-        `REPLACE INTO pictures
-          (id, user_name, user_screenname, user_id, description, provider, url, created_at, category, label, count, media_url, user_avatar_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO pictures
+          (id, user_name, user_screenname, user_id, description, provider, url, created_at, category, label, count, media_url, user_avatar_url, registered_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%S','now'))
+         ON CONFLICT(id, provider) DO UPDATE SET
+           user_name=excluded.user_name,
+           user_screenname=excluded.user_screenname,
+           user_id=excluded.user_id,
+           description=excluded.description,
+           url=excluded.url,
+           created_at=excluded.created_at,
+           category=excluded.category,
+           label=excluded.label,
+           count=excluded.count,
+           media_url=excluded.media_url,
+           user_avatar_url=excluded.user_avatar_url`
       )
       .bind(
         post.id,

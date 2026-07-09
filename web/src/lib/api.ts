@@ -28,7 +28,7 @@ export interface Picture {
 export interface Facets {
   categories: { category: string; n: number }[];
   providers: { provider: string; n: number }[];
-  authors: { screenName: string; userName: string; n: number }[];
+  authors: { screenName: string; userName: string; avatar: string; n: number }[];
   tags: { tag: string; n: number }[];
 }
 

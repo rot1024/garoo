@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ export interface Option {
   value: string;
   label: string;
   count?: number;
+  image?: string; // optional leading avatar (e.g. author icon)
 }
 
 // Cap how many options render at once. Filtering happens here (not via cmdk's
@@ -46,7 +47,16 @@ export default function MultiSelectFilter({
   onChange: (next: string[]) => void;
   searchPlaceholder?: string;
 }) {
+  // `search` is what the input shows; `query` is what we filter by. They differ
+  // only mid-IME-composition (`composing`), so kana being converted doesn't
+  // filter to "no results" until the word is committed.
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    if (!composing) setQuery(search);
+  }, [search, composing]);
+
   const set = new Set(selected);
   const toggle = (v: string) => {
     const next = new Set(set);
@@ -57,7 +67,7 @@ export default function MultiSelectFilter({
 
   // Selected options first, then those matching the query; capped for the DOM.
   const { shown, hidden } = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
     const matches = (o: Option) =>
       !q ||
       o.label.toLowerCase().includes(q) ||
@@ -68,10 +78,17 @@ export default function MultiSelectFilter({
     ];
     return { shown: ranked.slice(0, RENDER_LIMIT), hidden: Math.max(0, ranked.length - RENDER_LIMIT) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, search, selected.join(",")]);
+  }, [options, query, selected.join(",")]);
 
   return (
-    <Popover onOpenChange={(o) => !o && setSearch("")}>
+    <Popover
+      onOpenChange={(o) => {
+        if (!o) {
+          setSearch("");
+          setQuery("");
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -96,6 +113,12 @@ export default function MultiSelectFilter({
           <CommandInput
             value={search}
             onValueChange={setSearch}
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={() => setComposing(false)}
+            onKeyDown={(e) => {
+              // Don't let cmdk act on Enter/arrows used to confirm IME conversion.
+              if (e.nativeEvent.isComposing) e.stopPropagation();
+            }}
             placeholder={searchPlaceholder ?? `${label}を検索`}
           />
           <CommandList>
@@ -119,6 +142,14 @@ export default function MultiSelectFilter({
                     >
                       {active && <Check className="h-3 w-3" />}
                     </span>
+                    {o.image && (
+                      <img
+                        src={o.image}
+                        alt=""
+                        loading="lazy"
+                        className="h-5 w-5 shrink-0 rounded-full object-cover"
+                      />
+                    )}
                     <span className="flex-1 truncate">{o.label}</span>
                     {o.count != null && (
                       <span className="text-xs tabular-nums text-muted-foreground">

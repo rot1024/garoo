@@ -107,6 +107,7 @@ export default function FilterBar({
       // Label carries both name and @handle so the checklist search matches either.
       label: a.userName ? `${a.userName} @${a.screenName}` : `@${a.screenName}`,
       count: a.n,
+      image: a.avatar || undefined,
     })) ?? [];
 
   const total = activeCount(filters);

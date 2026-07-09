@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Moon, Sun, LogOut, ImageOff } from "lucide-react";
+import { Loader2, Moon, Sun, Monitor, LogOut, ImageOff } from "lucide-react";
 import { AuthContext } from "@/App";
 import {
   getFacets,
@@ -9,7 +9,12 @@ import {
   type Facets,
   type Picture,
 } from "@/lib/api";
-import { applyTheme, getInitialTheme, type Theme } from "@/lib/theme";
+import {
+  applyTheme,
+  getInitialTheme,
+  nextTheme,
+  type Theme,
+} from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import Masonry from "@/components/Masonry";
@@ -59,6 +64,14 @@ export default function Gallery() {
 
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   useEffect(() => applyTheme(theme), [theme]);
+  // In "system" mode, re-apply when the OS light/dark preference changes.
+  useEffect(() => {
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [theme]);
 
   const [facets, setFacets] = useState<Facets | null>(null);
   const [items, setItems] = useState<Picture[]>([]);
@@ -176,13 +189,16 @@ export default function Gallery() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              aria-label="テーマ切替"
+              onClick={() => setTheme(nextTheme(theme))}
+              aria-label={`テーマ: ${theme === "light" ? "ライト" : theme === "dark" ? "ダーク" : "システム"}（クリックで切替）`}
+              title={`テーマ: ${theme === "light" ? "ライト" : theme === "dark" ? "ダーク" : "システム"}`}
             >
-              {theme === "dark" ? (
+              {theme === "light" ? (
                 <Sun className="h-4 w-4" />
-              ) : (
+              ) : theme === "dark" ? (
                 <Moon className="h-4 w-4" />
+              ) : (
+                <Monitor className="h-4 w-4" />
               )}
             </Button>
             <Button

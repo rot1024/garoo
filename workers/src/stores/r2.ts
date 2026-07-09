@@ -1,7 +1,12 @@
 import type { Env, Post } from "../types";
 import type { Store, PrevRecord } from "./index";
-
-const DEFAULT_CATEGORY = "uncategorized";
+import {
+  normBase,
+  normCategory,
+  mediaFilename,
+  r2Key,
+  contentType,
+} from "./r2key";
 
 /**
  * R2 store. Saves media alongside Dropbox, but with a simpler layout: always
@@ -22,8 +27,7 @@ export class R2Store implements Store {
   static fromEnv(env: Env): R2Store | null {
     if (!env.R2) return null;
     // Reuse the Dropbox base dir so R2 mirrors the Dropbox layout (e.g. "garo").
-    const base = (env.DROPBOX_BASE_DIR ?? "").replace(/^\/+|\/+$/g, "");
-    return new R2Store(env.R2, base);
+    return new R2Store(env.R2, normBase(env.DROPBOX_BASE_DIR));
   }
 
   async save(post: Post, prev?: PrevRecord): Promise<void> {
@@ -68,14 +72,8 @@ export class R2Store implements Store {
     screenname: string,
     name: string
   ): string {
-    return [this.base, provider, category, screenname, name]
-      .filter((s) => s.length > 0)
-      .join("/");
+    return r2Key(this.base, provider, category, screenname, name);
   }
-}
-
-function normCategory(c?: string): string {
-  return c && c.length > 0 ? c : DEFAULT_CATEGORY;
 }
 
 async function download(url: string): Promise<ArrayBuffer> {
@@ -87,40 +85,11 @@ async function download(url: string): Promise<ArrayBuffer> {
 }
 
 function filename(post: Post, i: number, screenname: string): string {
-  const ext = extname((post.media ?? [])[i]?.url ?? "");
-  if ((post.media?.length ?? 0) <= 1) {
-    return `${screenname}_${post.id}${ext}`;
-  }
-  return `${screenname}_${post.id}_${i + 1}${ext}`;
-}
-
-function extname(url: string): string {
-  let p = url;
-  try {
-    p = new URL(url).pathname;
-  } catch {
-    // not a URL; use as-is
-  }
-  const base = p.split("/").pop() ?? "";
-  const dot = base.lastIndexOf(".");
-  return dot >= 0 ? base.slice(dot) : "";
-}
-
-function contentType(name: string): string | undefined {
-  const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    case "mp4":
-      return "video/mp4";
-    default:
-      return undefined;
-  }
+  return mediaFilename(
+    post.id,
+    (post.media ?? [])[i]?.url ?? "",
+    i,
+    post.media?.length ?? 0,
+    screenname
+  );
 }

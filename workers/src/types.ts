@@ -39,6 +39,16 @@ export interface Env {
   KV: KVNamespace;
   // "true"/"1" exposes the unauthenticated HTTP action endpoints (debug/admin).
   DEBUG?: string;
+
+  // Static Assets binding: serves the built gallery SPA (web/dist). Requests
+  // under /api/* run the Worker first (run_worker_first in wrangler.toml); all
+  // other paths fall through to these assets with SPA fallback.
+  ASSETS?: Fetcher;
+
+  // Shared secret gating the private gallery (/api/*, /gallery). The single user
+  // enters this key once; the Worker exchanges it for an HttpOnly session cookie.
+  // Unrelated to DEBUG — the gallery is a production surface, not a debug action.
+  GALLERY_KEY?: string;
   TWITTERAPI_IO_KEY?: string;
   // Kept for the archived browser-based provider (providers/x_browser.ts),
   // which may be revived later. Not used by the active twitterapi.io provider.

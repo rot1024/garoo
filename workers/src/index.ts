@@ -20,6 +20,7 @@ import { isText } from "./post";
 import { isCommand, processCommand } from "./commands";
 import { handleImport } from "./import";
 import { handleReconcile } from "./reconcile";
+import { handleGallery } from "./gallery";
 
 // Poll state lives in D1 (the `state` table via D1State), not KV: the poll lock
 // is written + deleted every cron minute, and KV's free tier only allows
@@ -90,6 +91,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const debug = isDebug(env);
+
+    // Private gallery API (/api/*). Has its own session-cookie auth, independent
+    // of DEBUG — the gallery is a production surface. Returns null for non-/api
+    // paths so they fall through to the health check / debug endpoints below (and
+    // ultimately to the static-asset SPA via run_worker_first in wrangler.toml).
+    const gallery = await handleGallery(request, env);
+    if (gallery) return gallery;
 
     // Health check (always available)
     if (url.pathname === "/") {

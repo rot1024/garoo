@@ -1,0 +1,517 @@
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  type Location,
+} from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  Check,
+  X,
+  Plus,
+  Save,
+} from "lucide-react";
+import { AuthContext } from "@/App";
+import {
+  getFacets,
+  getPicture,
+  mediaUrl,
+  updatePicture,
+  UnauthorizedError,
+  type Facets,
+  type Picture,
+} from "@/lib/api";
+import { formatDate, providerLabel } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+interface NavItem {
+  provider: string;
+  id: string;
+}
+
+/**
+ * Post detail. Rendered two ways (see App): as a modal over the still-mounted
+ * gallery (modal=true, via a backgroundLocation) so home keeps its scroll and
+ * filters, or as a standalone page on a direct deep-link (modal=false). ESC and
+ * the ‹ ›/arrow keys move between posts using the ordered list handed over in
+ * navigation state.
+ */
+export default function Detail({ modal = false }: { modal?: boolean }) {
+  const { provider = "", id = "" } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useContext(AuthContext);
+
+  const state = (location.state ?? null) as {
+    backgroundLocation?: Location;
+    list?: NavItem[];
+  } | null;
+  const background = state?.backgroundLocation;
+  const list = state?.list ?? [];
+
+  const idx = list.findIndex((x) => x.provider === provider && x.id === id);
+  const prev = idx > 0 ? list[idx - 1] : null;
+  const next = idx >= 0 && idx < list.length - 1 ? list[idx + 1] : null;
+
+  const [picture, setPicture] = useState<Picture | null>(null);
+  const [facets, setFacets] = useState<Facets | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+
+  const close = useCallback(() => {
+    if (background) navigate(background.pathname + background.search);
+    else navigate("/");
+  }, [background, navigate]);
+
+  const goto = useCallback(
+    (item: NavItem | null) => {
+      if (!item) return;
+      navigate(`/p/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}`, {
+        replace: true,
+        state: { backgroundLocation: background, list },
+      });
+    },
+    [navigate, background, list]
+  );
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    setActive(0);
+    getPicture(provider, id)
+      .then((p) => alive && setPicture(p))
+      .catch((e) => {
+        if (!alive) return;
+        if (e instanceof UnauthorizedError) auth.onUnauthorized();
+        else setError(e instanceof Error ? e.message : "読み込めませんでした");
+      })
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [provider, id, auth]);
+
+  useEffect(() => {
+    getFacets()
+      .then(setFacets)
+      .catch(() => {});
+  }, []);
+
+  // Keyboard: ←/→ switch posts, Esc closes (Esc only here for the full-page
+  // variant — the modal's Dialog handles Esc itself). Ignore arrows while an
+  // input is focused so text editing still works.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable);
+      if (typing) return;
+      if (e.key === "ArrowLeft") goto(prev);
+      else if (e.key === "ArrowRight") goto(next);
+      else if (e.key === "Escape" && !modal) close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goto, prev, next, close, modal]);
+
+  const body = (
+    <Body
+      loading={loading}
+      error={error}
+      picture={picture}
+      facets={facets}
+      active={active}
+      setActive={setActive}
+      prev={prev}
+      next={next}
+      onGoto={goto}
+      onClose={close}
+      onSaved={setPicture}
+      onUnauthorized={auth.onUnauthorized}
+    />
+  );
+
+  if (modal) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && close()}>
+        <DialogContent
+          hideClose
+          className="!flex !flex-col h-[92vh] w-[96vw] max-w-[1600px] gap-0 overflow-hidden p-0"
+        >
+          {body}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return <div className="flex h-screen flex-col">{body}</div>;
+}
+
+function Body({
+  loading,
+  error,
+  picture,
+  facets,
+  active,
+  setActive,
+  prev,
+  next,
+  onGoto,
+  onClose,
+  onSaved,
+  onUnauthorized,
+}: {
+  loading: boolean;
+  error: string | null;
+  picture: Picture | null;
+  facets: Facets | null;
+  active: number;
+  setActive: (n: number) => void;
+  prev: NavItem | null;
+  next: NavItem | null;
+  onGoto: (item: NavItem | null) => void;
+  onClose: () => void;
+  onSaved: (p: Picture) => void;
+  onUnauthorized: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (error || !picture) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <p className="text-sm text-destructive">{error ?? "not found"}</p>
+        <Button variant="outline" onClick={onClose}>
+          ギャラリーへ
+        </Button>
+      </div>
+    );
+  }
+
+  const media = picture.media;
+  const current = media[active];
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+      {/* Close */}
+      <button
+        onClick={onClose}
+        aria-label="閉じる"
+        className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      {/* Media area — solid letterbox (black in dark, white in light), never
+          grey. Prev/next arrows live inside here so their position is anchored
+          to the media area and stays put regardless of the image's aspect. */}
+      <div className="relative flex h-[50vh] w-full shrink-0 items-center justify-center overflow-hidden bg-white dark:bg-black lg:h-full lg:w-auto lg:flex-1">
+        {prev && (
+          <EdgeNav side="left" onClick={() => onGoto(prev)} label="前の投稿" />
+        )}
+        {next && (
+          <EdgeNav side="right" onClick={() => onGoto(next)} label="次の投稿" />
+        )}
+        {current ? (
+          current.type === "video" ? (
+            <video
+              key={current.key}
+              src={mediaUrl(current.key)}
+              controls
+              playsInline
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <motion.img
+              key={current.key}
+              src={mediaUrl(current.key)}
+              alt={picture.description || picture.screenName}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.25 }}
+              className="max-h-full max-w-full object-contain"
+            />
+          )
+        ) : (
+          <div className="p-24 text-sm text-white/70">no media</div>
+        )}
+
+        {/* In-post media thumbnails + counter */}
+        {media.length > 1 && (
+          <>
+            <div className="absolute bottom-2 left-1/2 flex max-w-[90%] -translate-x-1/2 gap-1.5 overflow-x-auto rounded-lg bg-black/50 p-1.5 no-scrollbar">
+              {media.map((m, i) => (
+                <button
+                  key={m.key}
+                  onClick={() => setActive(i)}
+                  className={cn(
+                    "h-12 w-12 shrink-0 overflow-hidden rounded border-2 transition",
+                    i === active
+                      ? "border-white"
+                      : "border-transparent opacity-60 hover:opacity-100"
+                  )}
+                >
+                  {m.type === "video" ? (
+                    <video src={mediaUrl(m.key)} muted preload="metadata" className="h-full w-full object-cover" />
+                  ) : (
+                    <img src={mediaUrl(m.key)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">
+              {active + 1} / {media.length}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Sidebar */}
+      <aside className="w-full shrink-0 space-y-5 overflow-y-auto border-t p-5 lg:w-[360px] lg:border-l lg:border-t-0">
+        <div className="flex items-center gap-3">
+          {picture.avatar && (
+            <img src={picture.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
+          )}
+          <div className="min-w-0">
+            {picture.userName && (
+              <div className="truncate font-medium">{picture.userName}</div>
+            )}
+            <Link
+              to={`/?author=${encodeURIComponent(picture.screenName)}`}
+              className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+            >
+              @{picture.screenName}
+            </Link>
+          </div>
+        </div>
+
+        <div className="space-y-1 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>{formatDate(picture.createdAt)}</span>
+            <Badge variant="secondary" className="shrink-0">
+              {providerLabel(picture.provider)}
+            </Badge>
+          </div>
+          {picture.url && (
+            <a
+              href={picture.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              元の投稿を開く
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+
+        {picture.description && (
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            {picture.description}
+          </p>
+        )}
+
+        <Separator />
+
+        <EditPanel
+          picture={picture}
+          categories={facets?.categories.map((c) => c.category) ?? []}
+          onSaved={onSaved}
+          onUnauthorized={onUnauthorized}
+        />
+      </aside>
+    </div>
+  );
+}
+
+function EdgeNav({
+  side,
+  onClick,
+  label,
+}: {
+  side: "left" | "right";
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        "absolute top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70",
+        side === "left" ? "left-3" : "right-3"
+      )}
+    >
+      {side === "left" ? (
+        <ChevronLeft className="h-6 w-6" />
+      ) : (
+        <ChevronRight className="h-6 w-6" />
+      )}
+    </button>
+  );
+}
+
+// Category + tag editor. Category is a free-text field with existing categories
+// as suggestions (native datalist); tags are add/remove chips. Saving PATCHes
+// the post — a category change moves its R2 media server-side and the returned
+// picture carries the new media keys.
+function EditPanel({
+  picture,
+  categories,
+  onSaved,
+  onUnauthorized,
+}: {
+  picture: Picture;
+  categories: string[];
+  onSaved: (p: Picture) => void;
+  onUnauthorized: () => void;
+}) {
+  const [category, setCategory] = useState(picture.category);
+  const [tags, setTags] = useState<string[]>(picture.tags);
+  const [tagInput, setTagInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCategory(picture.category);
+    setTags(picture.tags);
+  }, [picture]);
+
+  const suggestions = useMemo(
+    () => [...new Set(categories.filter(Boolean))].sort(),
+    [categories]
+  );
+
+  const dirty =
+    category !== picture.category ||
+    tags.length !== picture.tags.length ||
+    tags.some((t, i) => t !== picture.tags[i]);
+
+  const addTag = useCallback((raw: string) => {
+    const t = raw.trim();
+    if (!t) return;
+    setTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    setTagInput("");
+  }, []);
+
+  async function save() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setErr(null);
+    setSaved(false);
+    try {
+      const updated = await updatePicture(picture.provider, picture.id, {
+        category,
+        tags,
+      });
+      onSaved(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (e) {
+      if (e instanceof UnauthorizedError) onUnauthorized();
+      else setErr(e instanceof Error ? e.message : "保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">カテゴリ</label>
+        <Input
+          list="category-suggestions"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder="(未分類)"
+        />
+        <datalist id="category-suggestions">
+          {suggestions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">タグ</label>
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <Badge key={t} variant="secondary" className="gap-1 pr-1">
+              {t}
+              <button
+                onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                className="rounded-full p-0.5 hover:bg-background/60"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {tags.length === 0 && (
+            <span className="text-xs text-muted-foreground">なし</span>
+          )}
+        </div>
+        <div className="flex gap-1.5">
+          <Input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addTag(tagInput);
+              }
+            }}
+            placeholder="タグを追加してEnter"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => addTag(tagInput)}
+            disabled={!tagInput.trim()}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {err && <p className="text-sm text-destructive">{err}</p>}
+
+      <Button onClick={save} disabled={!dirty || saving} className="w-full">
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : saved ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Save className="h-4 w-4" />
+        )}
+        {saved ? "保存しました" : "保存"}
+      </Button>
+    </div>
+  );
+}

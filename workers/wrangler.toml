@@ -26,6 +26,17 @@ database_id = "fab08063-3c3d-4646-aada-f1ac557477e3"
 binding = "R2"
 bucket_name = "garoo"
 
+# Static Assets: serves the built gallery SPA (web/ at the repo root → web/dist).
+# run_worker_first routes API + the DEBUG maintenance endpoints to the Worker
+# first; every other path falls through to the assets, with SPA fallback so
+# client routes like /p/<provider>/<id> return index.html. The gallery's own
+# auth (GALLERY_KEY session cookie) gates /api/*, independent of DEBUG.
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/webhook", "/rescan", "/import-dropbox", "/reconcile"]
+
 # Non-secret config. DEBUG="true" exposes the unauthenticated HTTP action
 # endpoints (/webhook, /rescan, /import-dropbox); set to "false" (or remove) in
 # production to serve only the health check. (No secret named DEBUG exists, so

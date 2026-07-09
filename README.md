@@ -50,6 +50,69 @@ folder), normalize D1 first (e.g. `UPDATE pictures SET category=...`) and then
 run `GET /reconcile?target=...&dry=0` for each store to bring Dropbox, R2, and
 Notion back in line.
 
+## Gallery
+
+A private web gallery for browsing everything garoo has archived, served by the
+**same Worker** via [Static Assets](https://developers.cloudflare.com/workers/static-assets/).
+The SPA lives in [`web/`](web/) (Vite + React + Tailwind + shadcn/ui +
+framer-motion); its build output (`web/dist`) is served for every non-`/api`
+path, with `/api/*` handled by the Worker (`run_worker_first` in
+`wrangler.toml`).
+
+- **Pinterest-style masonry**, newest-first by default, with animated filtering.
+- **Filters**: category & tag (multi-select), free-text search, author, media
+  type (photo/video), and sort (newest/oldest). Filter state lives in the URL.
+- **Detail view** (`/p/<provider>/<id>`): full-size media (carousel for
+  multi-media posts), metadata, and inline **category/tag editing**.
+- **Media** is streamed from the private R2 bucket through `/api/media/...`
+  (auth-gated, with Range support). R2 keys aren't stored in D1 — they're
+  reconstructed from each row using the shared layout in
+  [`stores/r2key.ts`](workers/src/stores/r2key.ts), the same code the R2 store
+  writes with.
+
+### Editing categories/tags from the gallery
+
+D1 is the source of truth. A category change via the gallery updates D1 **and**
+moves the post's R2 objects to the new category path (the gallery keeps
+resolving them). Dropbox and Notion are brought in line with the existing
+`GET /reconcile?target=...&dry=0` flow (see [Categories](#categories)).
+
+### Auth
+
+The gallery has its own auth, **independent of `DEBUG`** (it's a production
+surface, not a maintenance action). A single shared secret, `GALLERY_KEY`, gates
+`/api/*`: the user enters it once, the Worker validates it and issues an
+HttpOnly, HMAC-derived session cookie (so `<img>`/`<video>` requests authenticate
+too). The key is remembered in `localStorage` (obfuscated) for convenience. This
+is intentionally minimal — one trusted user, no roles.
+
+### API
+
+All under `/api/*`, cookie-gated except `/api/health` and `/api/session`.
+
+- `GET /api/health` — health check
+- `GET|POST /api/session` — check / establish the session (POST `{ "key": "..." }`)
+- `GET /api/pictures` — list posts (keyset pagination; `sort`, `category`
+  (repeatable), `tag` (repeatable), `provider`, `author`, `media=photo|video`,
+  `q`, `cursor`, `limit`)
+- `GET /api/facets` — category / tag / provider counts for the filter UI
+- `GET /api/pictures/<provider>/<id>` — a single post
+- `PATCH /api/pictures/<provider>/<id>` — edit `{ category?, tags? }`
+- `GET /api/media/<key>` — stream an R2 media object
+
+### Local development
+
+```sh
+# terminal 1 — Worker + API + local D1/R2 on :8787
+cd workers && npx wrangler dev
+# terminal 2 — Vite dev server on :5173, proxying /api to :8787
+cd web && npm install && npm run dev
+```
+
+Set `GALLERY_KEY` (and `DROPBOX_BASE_DIR`) in `workers/.dev.vars` for local runs.
+`npm run deploy` in `workers/` builds `web/` first (via `predeploy`) so the
+Static Assets are up to date.
+
 ## Commands (post in Discord)
 
 - `garoo login dropbox` → returns the Dropbox authorize URL
@@ -79,8 +142,9 @@ npx wrangler secret put NOTION_TOKEN
 npx wrangler secret put NOTION_POST_DB
 npx wrangler secret put NOTION_SECONDARY_POST_DB
 npx wrangler secret put NOTION_AUTHOR_DB
+npx wrangler secret put GALLERY_KEY                # gates the private gallery (/api/*)
 
-npx wrangler deploy
+npx wrangler deploy                                # builds web/ first via predeploy
 ```
 
 The Dropbox token (refresh token) is stored in KV under `dropbox_token`; seed it with `garoo login dropbox`. The Dropbox app needs the `files.content.write` and `files.content.read` scopes.

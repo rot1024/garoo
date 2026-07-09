@@ -28,6 +28,7 @@ export interface Picture {
 export interface Facets {
   categories: { category: string; n: number }[];
   providers: { provider: string; n: number }[];
+  authors: { screenName: string; userName: string; n: number }[];
   tags: { tag: string; n: number }[];
 }
 
@@ -39,7 +40,7 @@ export interface ListParams {
   categories?: string[];
   tags?: string[];
   providers?: string[];
-  author?: string | null;
+  authors?: string[];
   media?: "all" | "photo" | "video";
   q?: string | null;
   limit?: number;
@@ -109,7 +110,7 @@ export function listPictures(params: ListParams): Promise<ListResult> {
   for (const c of params.categories ?? []) q.append("category", c);
   for (const t of params.tags ?? []) q.append("tag", t);
   for (const p of params.providers ?? []) q.append("provider", p);
-  if (params.author) q.set("author", params.author);
+  for (const a of params.authors ?? []) q.append("author", a);
   if (params.media && params.media !== "all") q.set("media", params.media);
   if (params.q) q.set("q", params.q);
   if (params.limit) q.set("limit", String(params.limit));

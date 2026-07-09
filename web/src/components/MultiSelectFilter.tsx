@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,14 @@ export interface Option {
   count?: number;
 }
 
+// Cap how many options render at once. Filtering happens here (not via cmdk's
+// built-in filter) so huge lists — e.g. thousands of authors — stay responsive:
+// only the matching, capped slice is ever in the DOM.
+const RENDER_LIMIT = 300;
+
 // A searchable multi-select backed by a Popover + cmdk list. Used for the
-// category and tag filters. `selected`/`onChange` are controlled by the parent.
+// category / tag / provider / author filters. `selected`/`onChange` are
+// controlled by the parent.
 export default function MultiSelectFilter({
   label,
   icon,
@@ -40,6 +46,7 @@ export default function MultiSelectFilter({
   onChange: (next: string[]) => void;
   searchPlaceholder?: string;
 }) {
+  const [search, setSearch] = useState("");
   const set = new Set(selected);
   const toggle = (v: string) => {
     const next = new Set(set);
@@ -48,8 +55,23 @@ export default function MultiSelectFilter({
     onChange([...next]);
   };
 
+  // Selected options first, then those matching the query; capped for the DOM.
+  const { shown, hidden } = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const matches = (o: Option) =>
+      !q ||
+      o.label.toLowerCase().includes(q) ||
+      o.value.toLowerCase().includes(q);
+    const ranked = [
+      ...options.filter((o) => set.has(o.value)),
+      ...options.filter((o) => !set.has(o.value) && matches(o)),
+    ];
+    return { shown: ranked.slice(0, RENDER_LIMIT), hidden: Math.max(0, ranked.length - RENDER_LIMIT) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, search, selected.join(",")]);
+
   return (
-    <Popover>
+    <Popover onOpenChange={(o) => !o && setSearch("")}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -70,12 +92,16 @@ export default function MultiSelectFilter({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder ?? `${label}を検索`} />
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={searchPlaceholder ?? `${label}を検索`}
+          />
           <CommandList>
             <CommandEmpty>見つかりません</CommandEmpty>
             <CommandGroup>
-              {options.map((o) => {
+              {shown.map((o) => {
                 const active = set.has(o.value);
                 return (
                   <CommandItem
@@ -103,6 +129,11 @@ export default function MultiSelectFilter({
                 );
               })}
             </CommandGroup>
+            {hidden > 0 && (
+              <div className="px-2 py-1.5 text-center text-xs text-muted-foreground">
+                他 {hidden} 件 — 検索で絞り込んでください
+              </div>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

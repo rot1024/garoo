@@ -34,7 +34,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     categories: sp.getAll("category"),
     tags: sp.getAll("tag"),
     providers: sp.getAll("provider"),
-    author: sp.get("author") ?? "",
+    authors: sp.getAll("author"),
   };
 }
 
@@ -46,7 +46,7 @@ function paramsFromFilters(f: Filters): URLSearchParams {
   for (const c of f.categories) sp.append("category", c);
   for (const t of f.tags) sp.append("tag", t);
   for (const p of f.providers) sp.append("provider", p);
-  if (f.author) sp.set("author", f.author);
+  for (const a of f.authors) sp.append("author", a);
   return sp;
 }
 
@@ -105,7 +105,7 @@ export default function Gallery() {
           categories: filters.categories,
           tags: filters.tags,
           providers: filters.providers,
-          author: filters.author || null,
+          authors: filters.authors,
           q: filters.q || null,
           cursor: reset ? null : nextCursor,
           limit: PAGE_SIZE,
@@ -124,7 +124,7 @@ export default function Gallery() {
         }
       }
     },
-    [auth, filters.sort, filters.media, filters.categories, filters.tags, filters.providers, filters.author, filters.q]
+    [auth, filters.sort, filters.media, filters.categories, filters.tags, filters.providers, filters.authors, filters.q]
   );
 
   // Reset + load first page whenever the filters change.

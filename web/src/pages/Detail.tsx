@@ -3,8 +3,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   useLocation,
@@ -22,6 +24,7 @@ import {
   X,
   Plus,
   Save,
+  SquareArrowOutUpRight,
 } from "lucide-react";
 import { AuthContext } from "@/App";
 import {
@@ -38,7 +41,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface NavItem {
@@ -46,12 +48,14 @@ interface NavItem {
   id: string;
 }
 
+const UNSAVED_MESSAGE = "未保存の変更があります。破棄してよろしいですか？";
+
 /**
- * Post detail. Rendered two ways (see App): as a modal over the still-mounted
- * gallery (modal=true, via a backgroundLocation) so home keeps its scroll and
- * filters, or as a standalone page on a direct deep-link (modal=false). ESC and
- * the ‹ ›/arrow keys move between posts using the ordered list handed over in
- * navigation state.
+ * Post detail. Rendered as a modal over the still-mounted gallery (modal=true,
+ * via a backgroundLocation) so home keeps its scroll and filters, or as a
+ * standalone page on a direct deep-link. ESC and the ‹ ›/arrow keys move between
+ * posts using the ordered list handed over in navigation state. When the edit
+ * form has unsaved changes, closing or paging away asks for confirmation first.
  */
 export default function Detail({ modal = false }: { modal?: boolean }) {
   const { provider = "", id = "" } = useParams();
@@ -76,20 +80,29 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
+  // Tracked via a ref so the confirm-guard reads the latest value without
+  // re-creating the close/goto callbacks (and their keydown listener) each edit.
+  const unsavedRef = useRef(false);
+  const confirmDiscard = useCallback(
+    () => !unsavedRef.current || window.confirm(UNSAVED_MESSAGE),
+    []
+  );
+
   const close = useCallback(() => {
+    if (!confirmDiscard()) return;
     if (background) navigate(background.pathname + background.search);
     else navigate("/");
-  }, [background, navigate]);
+  }, [background, navigate, confirmDiscard]);
 
   const goto = useCallback(
     (item: NavItem | null) => {
-      if (!item) return;
+      if (!item || !confirmDiscard()) return;
       navigate(`/p/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}`, {
         replace: true,
         state: { backgroundLocation: background, list },
       });
     },
-    [navigate, background, list]
+    [navigate, background, list, confirmDiscard]
   );
 
   useEffect(() => {
@@ -97,6 +110,7 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
     setLoading(true);
     setError(null);
     setActive(0);
+    unsavedRef.current = false;
     getPicture(provider, id)
       .then((p) => alive && setPicture(p))
       .catch((e) => {
@@ -117,8 +131,8 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
   }, []);
 
   // Keyboard: ←/→ switch posts, Esc closes (Esc only here for the full-page
-  // variant — the modal's Dialog handles Esc itself). Ignore arrows while an
-  // input is focused so text editing still works.
+  // variant — the modal's Dialog handles Esc via onOpenChange). Ignore arrows
+  // while an input is focused so text editing still works.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -136,6 +150,15 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [goto, prev, next, close, modal]);
 
+  const arrows = !loading && !error && (
+    <ModalArrows
+      prev={!!prev}
+      next={!!next}
+      onPrev={() => goto(prev)}
+      onNext={() => goto(next)}
+    />
+  );
+
   const body = (
     <Body
       loading={loading}
@@ -144,11 +167,9 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
       facets={facets}
       active={active}
       setActive={setActive}
-      prev={prev}
-      next={next}
-      onGoto={goto}
       onClose={close}
       onSaved={setPicture}
+      onDirtyChange={(d) => (unsavedRef.current = d)}
       onUnauthorized={auth.onUnauthorized}
     />
   );
@@ -156,9 +177,15 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
   if (modal) {
     return (
       <Dialog open onOpenChange={(o) => !o && close()}>
+        {arrows}
         <DialogContent
           hideClose
-          className="!flex !flex-col h-[92vh] w-[96vw] max-w-[1600px] gap-0 overflow-hidden p-0"
+          onInteractOutside={(e) => {
+            // Clicking a side arrow (portaled outside the card) must page, not close.
+            if ((e.target as HTMLElement).closest("[data-modal-arrow]"))
+              e.preventDefault();
+          }}
+          className="!flex !flex-col h-[92vh] w-[90vw] max-w-[1320px] gap-0 overflow-hidden p-0"
         >
           {body}
         </DialogContent>
@@ -166,7 +193,68 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
     );
   }
 
-  return <div className="flex h-screen flex-col">{body}</div>;
+  return (
+    <div className="flex h-screen flex-col">
+      {arrows}
+      {body}
+    </div>
+  );
+}
+
+/** Prev/next arrows pinned to the viewport edges, outside the modal card. */
+function ModalArrows({
+  prev,
+  next,
+  onPrev,
+  onNext,
+}: {
+  prev: boolean;
+  next: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  // Portaled to <body>: Radix marks the body pointer-events:none while a modal
+  // Dialog is open, so the buttons re-enable pointer events explicitly.
+  return createPortal(
+    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[60] flex items-center justify-between px-2">
+      {prev ? (
+        <ArrowButton side="left" onClick={onPrev} label="前の投稿" />
+      ) : (
+        <span />
+      )}
+      {next ? (
+        <ArrowButton side="right" onClick={onNext} label="次の投稿" />
+      ) : (
+        <span />
+      )}
+    </div>,
+    document.body
+  );
+}
+
+function ArrowButton({
+  side,
+  onClick,
+  label,
+}: {
+  side: "left" | "right";
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      data-modal-arrow
+      onClick={onClick}
+      aria-label={label}
+      className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80"
+    >
+      {side === "left" ? (
+        <ChevronLeft className="h-6 w-6" />
+      ) : (
+        <ChevronRight className="h-6 w-6" />
+      )}
+    </button>
+  );
 }
 
 function Body({
@@ -176,11 +264,9 @@ function Body({
   facets,
   active,
   setActive,
-  prev,
-  next,
-  onGoto,
   onClose,
   onSaved,
+  onDirtyChange,
   onUnauthorized,
 }: {
   loading: boolean;
@@ -189,11 +275,9 @@ function Body({
   facets: Facets | null;
   active: number;
   setActive: (n: number) => void;
-  prev: NavItem | null;
-  next: NavItem | null;
-  onGoto: (item: NavItem | null) => void;
   onClose: () => void;
   onSaved: (p: Picture) => void;
+  onDirtyChange: (dirty: boolean) => void;
   onUnauthorized: () => void;
 }) {
   if (loading) {
@@ -228,16 +312,8 @@ function Body({
         <X className="h-5 w-5" />
       </button>
 
-      {/* Media area — solid letterbox (black in dark, white in light), never
-          grey. Prev/next arrows live inside here so their position is anchored
-          to the media area and stays put regardless of the image's aspect. */}
+      {/* Media area — solid letterbox (black in dark, white in light), never grey. */}
       <div className="relative flex h-[50vh] w-full shrink-0 items-center justify-center overflow-hidden bg-white dark:bg-black lg:h-full lg:w-auto lg:flex-1">
-        {prev && (
-          <EdgeNav side="left" onClick={() => onGoto(prev)} label="前の投稿" />
-        )}
-        {next && (
-          <EdgeNav side="right" onClick={() => onGoto(next)} label="次の投稿" />
-        )}
         {current ? (
           current.type === "video" ? (
             <video
@@ -259,10 +335,23 @@ function Body({
             />
           )
         ) : (
-          <div className="p-24 text-sm text-white/70">no media</div>
+          <div className="p-24 text-sm text-muted-foreground">no media</div>
         )}
 
-        {/* In-post media thumbnails + counter */}
+        {/* Open the current media in a new tab */}
+        {current && (
+          <a
+            href={mediaUrl(current.key)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="画像を新しいタブで開く"
+            title="画像を新しいタブで開く"
+            className="absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+          >
+            <SquareArrowOutUpRight className="h-4 w-4" />
+          </a>
+        )}
+
         {media.length > 1 && (
           <>
             <div className="absolute bottom-2 left-1/2 flex max-w-[90%] -translate-x-1/2 gap-1.5 overflow-x-auto rounded-lg bg-black/50 p-1.5 no-scrollbar">
@@ -285,111 +374,91 @@ function Body({
                 </button>
               ))}
             </div>
-            <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">
+            <div className="absolute right-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">
               {active + 1} / {media.length}
             </div>
           </>
         )}
       </div>
 
-      {/* Sidebar */}
-      <aside className="w-full shrink-0 space-y-5 overflow-y-auto border-t p-5 lg:w-[360px] lg:border-l lg:border-t-0">
-        <div className="flex items-center gap-3">
-          {picture.avatar && (
-            <img src={picture.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
-          )}
-          <div className="min-w-0">
-            {picture.userName && (
-              <div className="truncate font-medium">{picture.userName}</div>
+      {/* Sidebar: scrollable info on top, edit form pinned to the bottom so its
+          position doesn't shift with the post's body length. */}
+      <aside className="flex w-full shrink-0 flex-col border-t lg:w-[380px] lg:border-l lg:border-t-0">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="flex items-center gap-3 pr-10">
+            {picture.avatar && (
+              <img src={picture.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
             )}
-            <Link
-              to={`/?author=${encodeURIComponent(picture.screenName)}`}
-              className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-              @{picture.screenName}
-            </Link>
+            <div className="min-w-0">
+              {picture.userName && (
+                <div className="truncate font-medium">{picture.userName}</div>
+              )}
+              <Link
+                to={`/?author=${encodeURIComponent(picture.screenName)}`}
+                className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+              >
+                @{picture.screenName}
+              </Link>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-1 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>{formatDate(picture.createdAt)}</span>
-            <Badge variant="secondary" className="shrink-0">
-              {providerLabel(picture.provider)}
-            </Badge>
+          <div className="space-y-1 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>{formatDate(picture.createdAt)}</span>
+              <Badge variant="secondary" className="shrink-0">
+                {providerLabel(picture.provider)}
+              </Badge>
+            </div>
+            {picture.url && (
+              <a
+                href={picture.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                元の投稿を開く
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
           </div>
-          {picture.url && (
-            <a
-              href={picture.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              元の投稿を開く
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+
+          {picture.description && (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              {picture.description}
+            </p>
           )}
         </div>
 
-        {picture.description && (
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-            {picture.description}
-          </p>
-        )}
-
-        <Separator />
-
-        <EditPanel
-          picture={picture}
-          categories={facets?.categories.map((c) => c.category) ?? []}
-          onSaved={onSaved}
-          onUnauthorized={onUnauthorized}
-        />
+        <div className="shrink-0 border-t p-4">
+          <EditPanel
+            picture={picture}
+            categories={facets?.categories.map((c) => c.category) ?? []}
+            onSaved={onSaved}
+            onDirtyChange={onDirtyChange}
+            onUnauthorized={onUnauthorized}
+          />
+        </div>
       </aside>
     </div>
-  );
-}
-
-function EdgeNav({
-  side,
-  onClick,
-  label,
-}: {
-  side: "left" | "right";
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      className={cn(
-        "absolute top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70",
-        side === "left" ? "left-3" : "right-3"
-      )}
-    >
-      {side === "left" ? (
-        <ChevronLeft className="h-6 w-6" />
-      ) : (
-        <ChevronRight className="h-6 w-6" />
-      )}
-    </button>
   );
 }
 
 // Category + tag editor. Category is a free-text field with existing categories
 // as suggestions (native datalist); tags are add/remove chips. Saving PATCHes
 // the post — a category change moves its R2 media server-side and the returned
-// picture carries the new media keys.
+// picture carries the new media keys. Reports its dirty state upward so the
+// modal can confirm before discarding unsaved edits.
 function EditPanel({
   picture,
   categories,
   onSaved,
+  onDirtyChange,
   onUnauthorized,
 }: {
   picture: Picture;
   categories: string[];
   onSaved: (p: Picture) => void;
+  onDirtyChange: (dirty: boolean) => void;
   onUnauthorized: () => void;
 }) {
   const [category, setCategory] = useState(picture.category);
@@ -413,6 +482,12 @@ function EditPanel({
     category !== picture.category ||
     tags.length !== picture.tags.length ||
     tags.some((t, i) => t !== picture.tags[i]);
+
+  // Keep the parent's unsaved-guard in sync; clear it when this panel unmounts.
+  useEffect(() => {
+    onDirtyChange(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
   const addTag = useCallback((raw: string) => {
     const t = raw.trim();
@@ -443,7 +518,7 @@ function EditPanel({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">カテゴリ</label>
         <Input
@@ -451,6 +526,7 @@ function EditPanel({
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="(未分類)"
+          className="h-8"
         />
         <datalist id="category-suggestions">
           {suggestions.map((c) => (
@@ -461,22 +537,21 @@ function EditPanel({
 
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">タグ</label>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <Badge key={t} variant="secondary" className="gap-1 pr-1">
-              {t}
-              <button
-                onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
-                className="rounded-full p-0.5 hover:bg-background/60"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-          {tags.length === 0 && (
-            <span className="text-xs text-muted-foreground">なし</span>
-          )}
-        </div>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t) => (
+              <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                {t}
+                <button
+                  onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                  className="rounded-full p-0.5 hover:bg-background/60"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
         <div className="flex gap-1.5">
           <Input
             value={tagInput}
@@ -488,30 +563,44 @@ function EditPanel({
               }
             }}
             placeholder="タグを追加してEnter"
+            className="h-8"
           />
           <Button
             variant="outline"
             size="icon"
             onClick={() => addTag(tagInput)}
             disabled={!tagInput.trim()}
+            className="h-8 w-8 shrink-0"
           >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {err && <p className="text-sm text-destructive">{err}</p>}
+      {err && <p className="text-xs text-destructive">{err}</p>}
 
-      <Button onClick={save} disabled={!dirty || saving} className="w-full">
-        {saving ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : saved ? (
-          <Check className="h-4 w-4" />
-        ) : (
-          <Save className="h-4 w-4" />
+      {/* Small, low-emphasis save — only actionable when there are edits. */}
+      <div className="flex items-center justify-end gap-2">
+        {dirty && !saving && (
+          <span className="text-xs text-muted-foreground">未保存</span>
         )}
-        {saved ? "保存しました" : "保存"}
-      </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={save}
+          disabled={!dirty || saving}
+          className="h-7 gap-1 px-2.5 text-xs"
+        >
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : saved ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          {saved ? "保存しました" : "保存"}
+        </Button>
+      </div>
     </div>
   );
 }

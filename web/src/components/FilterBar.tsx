@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Tag, FolderOpen, X, Globe, ArrowDownUp } from "lucide-react";
+import { Search, Tag, FolderOpen, X, Globe, ArrowDownUp, AtSign } from "lucide-react";
 import type { Facets, SortMode } from "@/lib/api";
 import { providerLabel } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,7 +20,7 @@ export interface Filters {
   categories: string[];
   tags: string[];
   providers: string[];
-  author: string; // "" = any; set by clicking an author
+  authors: string[]; // screennames; also settable by clicking an author
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -31,7 +30,7 @@ export const EMPTY_FILTERS: Filters = {
   categories: [],
   tags: [],
   providers: [],
-  author: "",
+  authors: [],
 };
 
 function activeCount(f: Filters): number {
@@ -39,9 +38,9 @@ function activeCount(f: Filters): number {
     f.categories.length +
     f.tags.length +
     f.providers.length +
+    f.authors.length +
     (f.q ? 1 : 0) +
-    (f.media !== "all" ? 1 : 0) +
-    (f.author ? 1 : 0)
+    (f.media !== "all" ? 1 : 0)
   );
 }
 
@@ -101,6 +100,13 @@ export default function FilterBar({
       value: p.provider,
       label: providerLabel(p.provider),
       count: p.n,
+    })) ?? [];
+  const authorOptions =
+    facets?.authors.map((a) => ({
+      value: a.screenName,
+      // Label carries both name and @handle so the checklist search matches either.
+      label: a.userName ? `${a.userName} @${a.screenName}` : `@${a.screenName}`,
+      count: a.n,
     })) ?? [];
 
   const total = activeCount(filters);
@@ -162,6 +168,14 @@ export default function FilterBar({
         selected={filters.providers}
         onChange={(providers) => onChange({ providers })}
       />
+      <MultiSelectFilter
+        label="作者"
+        icon={<AtSign className="h-3.5 w-3.5" />}
+        options={authorOptions}
+        selected={filters.authors}
+        onChange={(authors) => onChange({ authors })}
+        searchPlaceholder="名前・@IDで検索"
+      />
 
       {/* Sort */}
       <Select
@@ -180,21 +194,6 @@ export default function FilterBar({
           ))}
         </SelectContent>
       </Select>
-
-      {/* Author filter has no dedicated control (it's set by clicking an author),
-          so it gets a small removable badge inline — not a separate chips row. */}
-      {filters.author && (
-        <Badge variant="secondary" className="h-8 gap-1 pl-2.5 pr-1">
-          @{filters.author}
-          <button
-            onClick={() => onChange({ author: "" })}
-            aria-label="作者フィルタを外す"
-            className="rounded-full p-1 hover:bg-background/60"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      )}
 
       {total > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear} className="gap-1">

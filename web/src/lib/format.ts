@@ -18,6 +18,24 @@ export function providerLabel(provider: string): string {
   return PROVIDER_LABELS[provider.toLowerCase()] ?? provider;
 }
 
+// Twitter appends a t.co short link (to the media/quote) to the body text.
+// Strip those for display, then tidy the whitespace they leave behind.
+export function stripTcoLinks(text: string): string {
+  return text
+    .replace(/https?:\/\/t\.co\/[A-Za-z0-9]+/g, "")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Deterministic hue (0-359) from a string, for the solid-colour fallback tile
+// used by media-less (text) posts.
+export function hueFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+
 export function formatDate(createdAt: string): string {
   const d = parseDate(createdAt);
   if (!d) return createdAt;

@@ -3,12 +3,14 @@ import { Link, useLocation } from "react-router-dom";
 import { Play, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mediaUrl, type Picture } from "@/lib/api";
+import { hueFromString, stripTcoLinks } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 
 // A single masonry tile: the post's first media, with a hover overlay showing
 // author + category. Videos render a muted <video> (first frame as poster) with
-// a play badge; multi-media posts get a count badge. `navList` is the ordered
+// a play badge; multi-media posts get a count badge. Media-less (text) posts get
+// a solid-colour fallback tile showing the body text. `navList` is the ordered
 // list of the currently shown posts, passed through navigation state so the
 // detail modal can page prev/next; the current location becomes the modal's
 // background so the gallery stays mounted behind it.
@@ -23,11 +25,41 @@ export default function PictureCard({
   const [loaded, setLoaded] = useState(false);
   const first = picture.media[0];
   const isVideo = first?.type === "video";
+  const linkProps = {
+    to: `/p/${encodeURIComponent(picture.provider)}/${encodeURIComponent(picture.id)}`,
+    state: { backgroundLocation: location, list: navList },
+  };
+
+  // Media-less post → solid-colour text tile (deterministic tint from the id).
+  if (!first) {
+    const text = stripTcoLinks(picture.description);
+    return (
+      <Link
+        {...linkProps}
+        style={{ backgroundColor: `hsl(${hueFromString(picture.id)} 45% 50% / 0.16)` }}
+        className="group relative flex aspect-[4/3] flex-col justify-between overflow-hidden rounded-xl border p-3 shadow-sm transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <p className="line-clamp-6 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
+          {text || "(テキスト投稿)"}
+        </p>
+        <div className="flex items-center gap-2 pt-2">
+          <Avatar src={picture.avatar} className="h-5 w-5" />
+          <span className="truncate text-xs text-muted-foreground">
+            @{picture.screenName}
+          </span>
+          {picture.category && picture.category !== "_" && (
+            <Badge variant="secondary" className="ml-auto shrink-0 text-[10px]">
+              {picture.category}
+            </Badge>
+          )}
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <Link
-      to={`/p/${encodeURIComponent(picture.provider)}/${encodeURIComponent(picture.id)}`}
-      state={{ backgroundLocation: location, list: navList }}
+      {...linkProps}
       className="group relative block overflow-hidden rounded-xl border bg-muted/40 shadow-sm ring-0 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {first ? (

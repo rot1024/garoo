@@ -36,7 +36,7 @@ import {
   type Facets,
   type Picture,
 } from "@/lib/api";
-import { formatDate, providerLabel } from "@/lib/format";
+import { formatDate, providerLabel, stripTcoLinks } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,7 +208,7 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
             if ((e.target as HTMLElement).closest("[data-modal-arrow]"))
               e.preventDefault();
           }}
-          className="!flex !flex-col h-[92vh] w-[90vw] max-w-[1320px] gap-0 overflow-hidden p-0"
+          className="!flex !flex-col h-[92vh] w-[90vw] max-w-[1320px] gap-0 overflow-hidden p-0 outline-none focus:outline-none focus-visible:outline-none data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4"
         >
           {body}
         </DialogContent>
@@ -352,7 +352,7 @@ function Body({
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.2, ease: "easeInOut" }}
+                transition={{ duration: 0.1, ease: "easeInOut" }}
                 src={mediaUrl(current.key)}
                 controls
                 playsInline
@@ -366,7 +366,7 @@ function Body({
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.2, ease: "easeInOut" }}
+                transition={{ duration: 0.1, ease: "easeInOut" }}
                 src={mediaUrl(current.key)}
                 alt={picture.description || picture.screenName}
                 className="max-h-full max-w-full object-contain"
@@ -461,9 +461,9 @@ function Body({
             )}
           </div>
 
-          {picture.description && (
+          {stripTcoLinks(picture.description) && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {picture.description}
+              {stripTcoLinks(picture.description)}
             </p>
           )}
         </div>

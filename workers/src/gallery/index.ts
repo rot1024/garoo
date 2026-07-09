@@ -2,6 +2,7 @@ import type { Env } from "../types";
 import { json, handleSession, requireAuth } from "./auth";
 import { handleList, handleFacets, handleGetOne, handlePatch } from "./pictures";
 import { handleMedia } from "./media";
+import { handleBackfillMedia } from "./backfill";
 
 // Router for the private gallery API. Mounted on /api/* (which run_worker_first
 // in wrangler.toml routes to the Worker before static assets). Returns null for
@@ -34,6 +35,12 @@ export async function handleGallery(
   }
   if (path === "/api/facets" && request.method === "GET") {
     return handleFacets(env);
+  }
+
+  // Maintenance: backfill legacy NULL media_url/count from R2 (resumable, dry by
+  // default). Auth-gated like the rest of /api.
+  if (path === "/api/backfill-media" && request.method === "GET") {
+    return handleBackfillMedia(url, env);
   }
 
   const pic = /^\/api\/pictures\/([^/]+)\/([^/]+)$/.exec(path);

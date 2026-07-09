@@ -14,7 +14,7 @@ import {
   useParams,
   type Location,
 } from "react-router-dom";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -51,6 +51,13 @@ interface NavItem {
 
 const UNSAVED_MESSAGE = "未保存の変更があります。破棄してよろしいですか？";
 
+// Directional slide for paging between posts (direction: 1 = next, -1 = prev).
+const slideVariants = {
+  enter: (d: number) => ({ x: d >= 0 ? 40 : -40, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (d: number) => ({ x: d >= 0 ? -40 : 40, opacity: 0 }),
+};
+
 /**
  * Post detail. Rendered as a modal over the still-mounted gallery (modal=true,
  * via a backgroundLocation) so home keeps its scroll and filters, or as a
@@ -80,6 +87,8 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+  const [open, setOpen] = useState(true); // drives the Dialog's close animation
+  const [direction, setDirection] = useState(1); // 1 = next, -1 = prev (slide dir)
 
   // Tracked via a ref so the confirm-guard reads the latest value without
   // re-creating the close/goto callbacks (and their keydown listener) each edit.
@@ -89,15 +98,27 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
     []
   );
 
-  const close = useCallback(() => {
-    if (!confirmDiscard()) return;
+  const navigateAway = useCallback(() => {
     if (background) navigate(background.pathname + background.search);
     else navigate("/");
-  }, [background, navigate, confirmDiscard]);
+  }, [background, navigate]);
+
+  // Modal close: flip `open` so the Dialog plays its exit animation, then leave
+  // the route once it has finished. Full-page just navigates.
+  const requestClose = useCallback(() => {
+    if (!confirmDiscard()) return;
+    if (modal) {
+      setOpen(false);
+      window.setTimeout(navigateAway, 200);
+    } else {
+      navigateAway();
+    }
+  }, [confirmDiscard, modal, navigateAway]);
 
   const goto = useCallback(
-    (item: NavItem | null) => {
+    (item: NavItem | null, dir: number) => {
       if (!item || !confirmDiscard()) return;
+      setDirection(dir);
       navigate(`/p/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}`, {
         replace: true,
         state: { backgroundLocation: background, list },
@@ -143,20 +164,20 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
           t.tagName === "TEXTAREA" ||
           t.isContentEditable);
       if (typing) return;
-      if (e.key === "ArrowLeft") goto(prev);
-      else if (e.key === "ArrowRight") goto(next);
-      else if (e.key === "Escape" && !modal) close();
+      if (e.key === "ArrowLeft") goto(prev, -1);
+      else if (e.key === "ArrowRight") goto(next, 1);
+      else if (e.key === "Escape" && !modal) requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goto, prev, next, close, modal]);
+  }, [goto, prev, next, requestClose, modal]);
 
-  const arrows = !loading && !error && (
+  const arrows = open && !loading && !error && (
     <ModalArrows
       prev={!!prev}
       next={!!next}
-      onPrev={() => goto(prev)}
-      onNext={() => goto(next)}
+      onPrev={() => goto(prev, -1)}
+      onNext={() => goto(next, 1)}
     />
   );
 
@@ -168,7 +189,8 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
       facets={facets}
       active={active}
       setActive={setActive}
-      onClose={close}
+      direction={direction}
+      onClose={requestClose}
       onSaved={setPicture}
       onDirtyChange={(d) => (unsavedRef.current = d)}
       onUnauthorized={auth.onUnauthorized}
@@ -177,7 +199,7 @@ export default function Detail({ modal = false }: { modal?: boolean }) {
 
   if (modal) {
     return (
-      <Dialog open onOpenChange={(o) => !o && close()}>
+      <Dialog open={open} onOpenChange={(o) => !o && requestClose()}>
         {arrows}
         <DialogContent
           hideClose
@@ -265,6 +287,7 @@ function Body({
   facets,
   active,
   setActive,
+  direction,
   onClose,
   onSaved,
   onDirtyChange,
@@ -276,12 +299,15 @@ function Body({
   facets: Facets | null;
   active: number;
   setActive: (n: number) => void;
+  direction: number;
   onClose: () => void;
   onSaved: (p: Picture) => void;
   onDirtyChange: (dirty: boolean) => void;
   onUnauthorized: () => void;
 }) {
-  if (loading) {
+  // Only show the spinner on the very first load; while paging we keep the
+  // previous post visible so the slide transition isn't broken by a spinner.
+  if (loading && !picture) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -313,45 +339,43 @@ function Body({
         <X className="h-5 w-5" />
       </button>
 
-      {/* Media area — solid letterbox (black in dark, white in light), never grey. */}
+      {/* Media area — solid letterbox (black in dark, white in light), never grey.
+          Paging between posts slides the media in the travel direction. */}
       <div className="relative flex h-[50vh] w-full shrink-0 items-center justify-center overflow-hidden bg-white dark:bg-black lg:h-full lg:w-auto lg:flex-1">
-        {current ? (
-          current.type === "video" ? (
-            <video
-              key={current.key}
-              src={mediaUrl(current.key)}
-              controls
-              playsInline
-              className="max-h-full max-w-full object-contain"
-            />
+        <AnimatePresence mode="wait" custom={direction} initial={false}>
+          {current ? (
+            current.type === "video" ? (
+              <motion.video
+                key={current.key}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                src={mediaUrl(current.key)}
+                controls
+                playsInline
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <motion.img
+                key={current.key}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                src={mediaUrl(current.key)}
+                alt={picture.description || picture.screenName}
+                className="max-h-full max-w-full object-contain"
+              />
+            )
           ) : (
-            <motion.img
-              key={current.key}
-              src={mediaUrl(current.key)}
-              alt={picture.description || picture.screenName}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.25 }}
-              className="max-h-full max-w-full object-contain"
-            />
-          )
-        ) : (
-          <div className="p-24 text-sm text-muted-foreground">no media</div>
-        )}
-
-        {/* Open the current media in a new tab */}
-        {current && (
-          <a
-            href={mediaUrl(current.key)}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="画像を新しいタブで開く"
-            title="画像を新しいタブで開く"
-            className="absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
-          >
-            <SquareArrowOutUpRight className="h-4 w-4" />
-          </a>
-        )}
+            <div className="p-24 text-sm text-muted-foreground">no media</div>
+          )}
+        </AnimatePresence>
 
         {media.length > 1 && (
           <>
@@ -401,22 +425,38 @@ function Body({
             </div>
           </div>
 
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span>{formatDate(picture.createdAt)}</span>
-              <Badge variant="secondary" className="shrink-0">
-                {providerLabel(picture.provider)}
-              </Badge>
-            </div>
-            {picture.url && (
+          {/* Date links to the original post; the media "open in new tab" link
+              sits at the right of this row (kept off the image itself). */}
+          <div className="flex items-center gap-2 text-sm">
+            {picture.url ? (
               <a
                 href={picture.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline"
+                title="元の投稿を開く"
+                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
               >
-                元の投稿を開く
+                {formatDate(picture.createdAt)}
                 <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            ) : (
+              <span className="text-muted-foreground">
+                {formatDate(picture.createdAt)}
+              </span>
+            )}
+            <Badge variant="secondary" className="shrink-0">
+              {providerLabel(picture.provider)}
+            </Badge>
+            {current && (
+              <a
+                href={mediaUrl(current.key)}
+                target="_blank"
+                rel="noreferrer"
+                title="画像を新しいタブで開く"
+                className="ml-auto inline-flex shrink-0 items-center gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <SquareArrowOutUpRight className="h-3.5 w-3.5" />
+                画像
               </a>
             )}
           </div>

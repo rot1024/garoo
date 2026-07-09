@@ -59,16 +59,27 @@ framer-motion); its build output (`web/dist`) is served for every non-`/api`
 path, with `/api/*` handled by the Worker (`run_worker_first` in
 `wrangler.toml`).
 
-- **Pinterest-style masonry**, newest-first by default, with animated filtering.
-- **Filters**: category & tag (multi-select), free-text search, author, media
-  type (photo/video), and sort (newest/oldest). Filter state lives in the URL.
-- **Detail view** (`/p/<provider>/<id>`): full-size media (carousel for
-  multi-media posts), metadata, and inline **category/tag editing**.
+- **Pinterest-style masonry** (row-major, variable heights) with animated
+  filtering, image loading skeletons, and infinite scroll that pages as soon as
+  the shortest column is reached. Clicking the **garoo** logo resets filters and
+  scrolls to the top.
+- **Filters** (state lives in the URL; collapsed behind a toggle on mobile):
+  category, tag, author, and provider (searchable multi-select checklists); a
+  media-type checklist (種類 = 画像 / 動画 / メディアなし, default 画像+動画);
+  IME-aware free-text search; and sort by post date or registration date
+  (asc/desc) plus a **seeded random shuffle** (🔀; the seed is kept in the URL so
+  paging stays consistent). Media-less/text posts show as solid-colour tiles.
+- **Detail view** — a modal over the still-mounted gallery (so scroll and filters
+  are preserved), or a full page on a direct `/p/<provider>/<id>` link. Full-size
+  media (carousel for multi-media), open-in-new-tab, the post date linking to the
+  original, registration date/order, and inline **category/tag editing** (with an
+  unsaved-changes confirm). ←/→ or the edge arrows page between posts.
 - **Media** is streamed from the private R2 bucket through `/api/media/...`
   (auth-gated, with Range support). R2 keys aren't stored in D1 — they're
   reconstructed from each row using the shared layout in
   [`stores/r2key.ts`](workers/src/stores/r2key.ts), the same code the R2 store
-  writes with.
+  writes with. Editing a category also moves the post's R2 objects and updates
+  the failure-fallback placeholder shown for any media that 404s.
 
 ### Editing categories/tags from the gallery
 
@@ -92,13 +103,27 @@ All under `/api/*`, cookie-gated except `/api/health` and `/api/session`.
 
 - `GET /api/health` — health check
 - `GET|POST /api/session` — check / establish the session (POST `{ "key": "..." }`)
-- `GET /api/pictures` — list posts (keyset pagination; `sort`, `category`
-  (repeatable), `tag` (repeatable), `provider`, `author`, `media=photo|video`,
-  `q`, `cursor`, `limit`)
-- `GET /api/facets` — category / tag / provider counts for the filter UI
+- `GET /api/pictures` — list posts (keyset pagination). Params: `sort`
+  (`newest|oldest|added_desc|added_asc|random`), `seed` (for `random`),
+  `category` (repeatable; empty = uncategorized), `tag` (repeatable), `provider`
+  (repeatable), `author` (repeatable), `mediaset` (comma list of
+  `image|video|none`; absent = image+video), `q`, `cursor`, `limit`
+- `GET /api/facets` — category / tag / provider / author counts for the filters
 - `GET /api/pictures/<provider>/<id>` — a single post
 - `PATCH /api/pictures/<provider>/<id>` — edit `{ category?, tags? }`
 - `GET /api/media/<key>` — stream an R2 media object
+- `GET /api/backfill-media` — one-off maintenance: backfill `media_url`/`count`
+  for legacy rows imported without them, from the actual R2 objects (idempotent;
+  resumable via `?cursor`; dry-run unless `?dry=0`)
+
+### Registration date & legacy imports
+
+`registered_at` records when garoo first saved a post (the D1 store upserts, so
+re-processing keeps the original time and `picture_id` order). Rows imported from
+the old app predate this, so the modal falls back to a **登録順 #picture_id** for
+them. Those same imports also lacked `media_url`/`count`; run
+`GET /api/backfill-media?dry=0` (in a loop until `nextCursor` is null) to restore
+them from R2 so they display with the correct extension/count.
 
 ### Local development
 

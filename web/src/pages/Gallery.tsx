@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Moon, Sun, Monitor, SlidersHorizontal, ImageOff } from "lucide-react";
+import { Loader2, Moon, Sun, Monitor, SlidersHorizontal, Shuffle, ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthContext } from "@/App";
 import {
@@ -131,6 +131,21 @@ export default function Gallery() {
     setSearchParams(new URLSearchParams(), { replace: true });
   }, [setSearchParams]);
 
+  // Logo = home: clear all filters and scroll back to the top.
+  const goHome = useCallback(() => {
+    clearFilters();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [clearFilters]);
+
+  // Shuffle (also exposed here so it's reachable on mobile without opening the
+  // collapsed filters): switch to random sort with a fresh seed.
+  const shuffle = useCallback(() => {
+    patchFilters({
+      sort: "random",
+      seed: String(Math.floor(Math.random() * 2147483647) + 1),
+    });
+  }, [patchFilters]);
+
   useEffect(() => {
     getFacets()
       .then(setFacets)
@@ -210,9 +225,9 @@ export default function Gallery() {
           {/* Title doubles as home / clear-all: clicking it resets the filters. */}
           <div className="flex shrink-0 items-baseline gap-2 lg:order-1">
             <button
-              onClick={clearFilters}
-              title="ホーム / フィルタをクリア"
-              aria-label="ホームに戻ってフィルタをクリア"
+              onClick={goHome}
+              title="ホーム / フィルタをクリア / トップへ"
+              aria-label="ホームに戻る（フィルタをクリアしてトップへスクロール）"
               className="text-lg font-semibold tracking-tight transition-colors hover:text-muted-foreground"
             >
               garoo
@@ -222,8 +237,18 @@ export default function Gallery() {
             </span>
           </div>
 
-          {/* Actions: mobile filter toggle (lg:hidden) + theme. */}
+          {/* Actions: mobile shuffle + filter toggle (both lg:hidden) + theme. */}
           <div className="ml-auto flex shrink-0 items-center gap-1 lg:order-3 lg:ml-0">
+            <Button
+              variant={filters.sort === "random" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={shuffle}
+              aria-label="シャッフル"
+              title="シャッフル（ランダムに並べ替え）"
+              className="lg:hidden"
+            >
+              <Shuffle className="h-4 w-4" />
+            </Button>
             <Button
               variant={filtersOpen ? "secondary" : "ghost"}
               size="icon"

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Tag, FolderOpen, X, ArrowDownUp, AtSign } from "lucide-react";
+import { Search, Tag, FolderOpen, ArrowDownUp, AtSign, Shapes } from "lucide-react";
 import type { Facets, SortMode } from "@/lib/api";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -32,17 +31,6 @@ export const EMPTY_FILTERS: Filters = {
   authors: [],
 };
 
-function activeCount(f: Filters): number {
-  return (
-    f.categories.length +
-    f.tags.length +
-    f.providers.length +
-    f.authors.length +
-    (f.q ? 1 : 0) +
-    (f.media !== "all" ? 1 : 0)
-  );
-}
-
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "newest", label: "投稿日（新しい順）" },
   { value: "oldest", label: "投稿日（古い順）" },
@@ -60,12 +48,10 @@ export default function FilterBar({
   filters,
   facets,
   onChange,
-  onClear,
 }: {
   filters: Filters;
   facets: Facets | null;
   onChange: (patch: Partial<Filters>) => void;
-  onClear: () => void;
 }) {
   // Debounce the search box, and don't fire mid-IME-composition: `composing`
   // gates the effect, so a query only runs once (after compositionend) rather
@@ -103,8 +89,6 @@ export default function FilterBar({
       image: a.avatar, // always defined for authors -> Avatar shows a grey fallback if empty
     })) ?? [];
 
-  const total = activeCount(filters);
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Search */}
@@ -123,13 +107,17 @@ export default function FilterBar({
         />
       </div>
 
-      {/* Media type */}
+      {/* Media type ("種類") — icon + label to match the other filters; shows the
+          title when unfiltered (all), the chosen kind otherwise. */}
       <Select
         value={filters.media}
         onValueChange={(v) => onChange({ media: v as Filters["media"] })}
       >
-        <SelectTrigger className="w-auto gap-1.5">
-          <SelectValue />
+        <SelectTrigger className="w-auto gap-1.5" aria-label="種類">
+          <Shapes className="h-3.5 w-3.5" />
+          {filters.media === "all"
+            ? "種類"
+            : MEDIA_OPTIONS.find((o) => o.value === filters.media)?.label}
         </SelectTrigger>
         <SelectContent>
           {MEDIA_OPTIONS.map((o) => (
@@ -181,13 +169,6 @@ export default function FilterBar({
           ))}
         </SelectContent>
       </Select>
-
-      {total > 0 && (
-        <Button variant="ghost" size="sm" onClick={onClear} className="gap-1">
-          <X className="h-3.5 w-3.5" />
-          クリア
-        </Button>
-      )}
     </div>
   );
 }

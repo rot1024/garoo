@@ -182,11 +182,16 @@ export default function Gallery() {
           wraps to two rows below `lg` (title+actions, then filters). */}
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          {/* Title + count */}
+          {/* Title doubles as home / clear-all: clicking it resets the filters. */}
           <div className="flex shrink-0 items-baseline gap-2 lg:order-1">
-            <h1 className="text-lg font-semibold tracking-tight">
-              garoo<span className="text-muted-foreground"> / gallery</span>
-            </h1>
+            <button
+              onClick={clearFilters}
+              title="ホーム / フィルタをクリア"
+              aria-label="ホームに戻ってフィルタをクリア"
+              className="text-lg font-semibold tracking-tight transition-colors hover:text-muted-foreground"
+            >
+              garoo
+            </button>
             <span className="text-xs text-muted-foreground">
               {!loading && `${items.length}${cursor ? "+" : ""} 件`}
             </span>
@@ -222,12 +227,7 @@ export default function Gallery() {
 
           {/* Filters: full-width second row below lg; flexible middle on lg */}
           <div className="w-full min-w-0 lg:order-2 lg:w-auto lg:flex-1">
-            <FilterBar
-              filters={filters}
-              facets={facets}
-              onChange={patchFilters}
-              onClear={clearFilters}
-            />
+            <FilterBar filters={filters} facets={facets} onChange={patchFilters} />
           </div>
         </div>
       </header>

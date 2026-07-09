@@ -7,6 +7,15 @@ import { hueFromString, stripTcoLinks } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 
+// Remember each media's aspect ratio (width/height) once it has loaded, so that
+// re-renders (shuffle, filter, scroll-back) reserve the correct height up front
+// and the tile doesn't jump. Lives for the session.
+const aspectCache = new Map<string, number>();
+
+// Default reserved ratio before a media's real ratio is known (portrait-ish,
+// common for illustrations) — keeps a skeleton in place instead of 0 height.
+const DEFAULT_RATIO = 0.8;
+
 // A single masonry tile: the post's first media, with a hover overlay showing
 // author + category. Videos render a muted <video> (first frame as poster) with
 // a play badge; multi-media posts get a count badge. Media-less (text) posts get
@@ -22,9 +31,21 @@ export default function PictureCard({
   navList: { provider: string; id: string }[];
 }) {
   const location = useLocation();
-  const [loaded, setLoaded] = useState(false);
   const first = picture.media[0];
   const isVideo = first?.type === "video";
+  const [loaded, setLoaded] = useState(false);
+  // Reserve the real ratio if we've seen this media before, else the default.
+  const [ratio, setRatio] = useState<number>(
+    () => (first && aspectCache.get(first.key)) || DEFAULT_RATIO
+  );
+  const onMediaLoad = (w: number, h: number) => {
+    if (first && w > 0 && h > 0) {
+      const r = w / h;
+      aspectCache.set(first.key, r);
+      setRatio(r);
+    }
+    setLoaded(true);
+  };
   const linkProps = {
     to: `/p/${encodeURIComponent(picture.provider)}/${encodeURIComponent(picture.id)}`,
     state: { backgroundLocation: location, list: navList },
@@ -62,16 +83,26 @@ export default function PictureCard({
       {...linkProps}
       className="group relative block overflow-hidden rounded-xl border bg-muted/40 shadow-sm ring-0 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {first ? (
-        isVideo ? (
+      {/* Aspect-ratio box reserves the tile's height so nothing jumps: it shows
+          a pulsing skeleton until the media loads, then fades the media in. */}
+      <div
+        className={cn(
+          "relative w-full overflow-hidden bg-muted",
+          !loaded && "animate-pulse"
+        )}
+        style={{ aspectRatio: ratio }}
+      >
+        {isVideo ? (
           <video
             src={mediaUrl(first.key)}
             muted
             playsInline
             preload="metadata"
-            onLoadedData={() => setLoaded(true)}
+            onLoadedMetadata={(e) =>
+              onMediaLoad(e.currentTarget.videoWidth, e.currentTarget.videoHeight)
+            }
             className={cn(
-              "w-full transition-opacity duration-500",
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
               loaded ? "opacity-100" : "opacity-0"
             )}
           />
@@ -81,18 +112,16 @@ export default function PictureCard({
             alt={picture.description || picture.screenName}
             loading="lazy"
             decoding="async"
-            onLoad={() => setLoaded(true)}
+            onLoad={(e) =>
+              onMediaLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
+            }
             className={cn(
-              "w-full transition-opacity duration-500",
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
               loaded ? "opacity-100" : "opacity-0"
             )}
           />
-        )
-      ) : (
-        <div className="flex aspect-square items-center justify-center text-xs text-muted-foreground">
-          no media
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Top-right badges: video play / multi-count */}
       <div className="pointer-events-none absolute right-2 top-2 flex gap-1">

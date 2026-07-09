@@ -25,7 +25,13 @@ import { providerLabel } from "@/lib/format";
 
 const PAGE_SIZE = 40;
 
-const SORT_VALUES = ["newest", "oldest", "added_desc", "added_asc"] as const;
+const SORT_VALUES = [
+  "newest",
+  "oldest",
+  "added_desc",
+  "added_asc",
+  "random",
+] as const;
 
 function filtersFromParams(sp: URLSearchParams): Filters {
   const sort = sp.get("sort") ?? "newest";
@@ -42,6 +48,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     tags: sp.getAll("tag"),
     providers: sp.getAll("provider"),
     authors: sp.getAll("author"),
+    seed: sp.get("seed") ?? "",
   };
 }
 
@@ -54,6 +61,7 @@ function paramsFromFilters(f: Filters): URLSearchParams {
   for (const t of f.tags) sp.append("tag", t);
   for (const p of f.providers) sp.append("provider", p);
   for (const a of f.authors) sp.append("author", a);
+  if (f.sort === "random" && f.seed) sp.set("seed", f.seed);
   return sp;
 }
 
@@ -116,6 +124,7 @@ export default function Gallery() {
       try {
         const res = await listPictures({
           sort: filters.sort,
+          seed: filters.seed || null,
           media: filters.media,
           categories: filters.categories,
           tags: filters.tags,
@@ -139,7 +148,7 @@ export default function Gallery() {
         }
       }
     },
-    [auth, filters.sort, filters.media, filters.categories, filters.tags, filters.providers, filters.authors, filters.q]
+    [auth, filters.sort, filters.seed, filters.media, filters.categories, filters.tags, filters.providers, filters.authors, filters.q]
   );
 
   // Reset + load first page whenever the filters change.

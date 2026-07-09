@@ -32,10 +32,16 @@ export interface Facets {
   tags: { tag: string; n: number }[];
 }
 
-export type SortMode = "newest" | "oldest" | "added_desc" | "added_asc";
+export type SortMode =
+  | "newest"
+  | "oldest"
+  | "added_desc"
+  | "added_asc"
+  | "random";
 
 export interface ListParams {
   sort?: SortMode;
+  seed?: string | null; // required for sort=random (keeps paging consistent)
   cursor?: string | null;
   categories?: string[];
   tags?: string[];
@@ -106,6 +112,7 @@ export async function login(key: string): Promise<boolean> {
 export function listPictures(params: ListParams): Promise<ListResult> {
   const q = new URLSearchParams();
   if (params.sort) q.set("sort", params.sort);
+  if (params.sort === "random" && params.seed) q.set("seed", params.seed);
   if (params.cursor) q.set("cursor", params.cursor);
   for (const c of params.categories ?? []) q.append("category", c);
   for (const t of params.tags ?? []) q.append("tag", t);

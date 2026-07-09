@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Tag, FolderOpen, ArrowDownUp, AtSign, Shapes } from "lucide-react";
+import { Search, Tag, FolderOpen, ArrowDownUp, AtSign, Shapes, Shuffle } from "lucide-react";
 import type { Facets, SortMode } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,6 +20,7 @@ export interface Filters {
   tags: string[];
   providers: string[];
   authors: string[]; // screennames; also settable by clicking an author
+  seed: string; // shuffle seed; only meaningful when sort === "random"
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -29,6 +31,7 @@ export const EMPTY_FILTERS: Filters = {
   tags: [],
   providers: [],
   authors: [],
+  seed: "",
 };
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
@@ -36,7 +39,13 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "oldest", label: "投稿日（古い順）" },
   { value: "added_desc", label: "登録日（新しい順）" },
   { value: "added_asc", label: "登録日（古い順）" },
+  { value: "random", label: "ランダム" },
 ];
+
+/** A fresh positive shuffle seed (kept in the URL so paging stays consistent). */
+function newSeed(): string {
+  return String(Math.floor(Math.random() * 2147483647) + 1);
+}
 
 const MEDIA_OPTIONS: { value: Filters["media"]; label: string }[] = [
   { value: "all", label: "すべて" },
@@ -152,10 +161,14 @@ export default function FilterBar({
         searchPlaceholder="名前・@IDで検索"
       />
 
-      {/* Sort */}
+      {/* Sort — picking ランダム mints a seed so paging stays consistent. */}
       <Select
         value={filters.sort}
-        onValueChange={(v) => onChange({ sort: v as SortMode })}
+        onValueChange={(v) =>
+          v === "random"
+            ? onChange({ sort: "random", seed: filters.seed || newSeed() })
+            : onChange({ sort: v as SortMode })
+        }
       >
         <SelectTrigger className="w-auto gap-1.5">
           <ArrowDownUp className="h-3.5 w-3.5" />
@@ -169,6 +182,17 @@ export default function FilterBar({
           ))}
         </SelectContent>
       </Select>
+
+      {/* Shuffle: switch to random and re-roll the seed to dig up new finds. */}
+      <Button
+        variant={filters.sort === "random" ? "secondary" : "outline"}
+        size="icon"
+        onClick={() => onChange({ sort: "random", seed: newSeed() })}
+        aria-label="シャッフル"
+        title="シャッフル（ランダムに並べ替え）"
+      >
+        <Shuffle className="h-4 w-4" />
+      </Button>
     </div>
   );
 }

@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface NavItem {
@@ -386,9 +387,7 @@ function Body({
       <aside className="flex w-full shrink-0 flex-col border-t lg:w-[380px] lg:border-l lg:border-t-0">
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
           <div className="flex items-center gap-3 pr-10">
-            {picture.avatar && (
-              <img src={picture.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
-            )}
+            <Avatar src={picture.avatar} className="h-11 w-11" />
             <div className="min-w-0">
               {picture.userName && (
                 <div className="truncate font-medium">{picture.userName}</div>

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Tag, FolderOpen, X, Globe, ArrowDownUp, AtSign } from "lucide-react";
+import { Search, Tag, FolderOpen, X, ArrowDownUp, AtSign } from "lucide-react";
 import type { Facets, SortMode } from "@/lib/api";
-import { providerLabel } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,19 +94,13 @@ export default function FilterBar({
     })) ?? [];
   const tagOptions =
     facets?.tags.map((t) => ({ value: t.tag, label: t.tag, count: t.n })) ?? [];
-  const providerOptions =
-    facets?.providers.map((p) => ({
-      value: p.provider,
-      label: providerLabel(p.provider),
-      count: p.n,
-    })) ?? [];
   const authorOptions =
     facets?.authors.map((a) => ({
       value: a.screenName,
       // Label carries both name and @handle so the checklist search matches either.
       label: a.userName ? `${a.userName} @${a.screenName}` : `@${a.screenName}`,
       count: a.n,
-      image: a.avatar || undefined,
+      image: a.avatar, // always defined for authors -> Avatar shows a grey fallback if empty
     })) ?? [];
 
   const total = activeCount(filters);
@@ -161,13 +154,6 @@ export default function FilterBar({
         options={tagOptions}
         selected={filters.tags}
         onChange={(tags) => onChange({ tags })}
-      />
-      <MultiSelectFilter
-        label="プロバイダ"
-        icon={<Globe className="h-3.5 w-3.5" />}
-        options={providerOptions}
-        selected={filters.providers}
-        onChange={(providers) => onChange({ providers })}
       />
       <MultiSelectFilter
         label="作者"

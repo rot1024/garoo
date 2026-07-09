@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Popover,
   PopoverContent,
@@ -39,6 +40,7 @@ export default function MultiSelectFilter({
   selected,
   onChange,
   searchPlaceholder,
+  iconOnly = false,
 }: {
   label: string;
   icon?: ReactNode;
@@ -46,6 +48,7 @@ export default function MultiSelectFilter({
   selected: string[];
   onChange: (next: string[]) => void;
   searchPlaceholder?: string;
+  iconOnly?: boolean; // header-style trigger: just the icon + a count dot
 }) {
   // `search` is what the input shows; `query` is what we filter by. They differ
   // only mid-IME-composition (`composing`), so kana being converted doesn't
@@ -90,25 +93,55 @@ export default function MultiSelectFilter({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            "gap-1.5",
-            selected.length > 0 && "border-primary/60 bg-primary/5"
-          )}
-        >
-          {icon}
-          {label}
-          {selected.length > 0 && (
-            <Badge className="ml-0.5 h-5 rounded px-1.5 py-0 text-[11px]">
-              {selected.length}
-            </Badge>
-          )}
-          <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-        </Button>
+        {iconOnly ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={label}
+            title={label}
+            className={cn("relative", selected.length > 0 && "text-primary")}
+          >
+            {icon}
+            {selected.length > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                {selected.length}
+              </span>
+            )}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "gap-1.5",
+              selected.length > 0 && "border-primary/60 bg-primary/5"
+            )}
+          >
+            {icon}
+            {label}
+            {selected.length > 0 && (
+              <Badge className="ml-0.5 h-5 rounded px-1.5 py-0 text-[11px]">
+                {selected.length}
+              </Badge>
+            )}
+            <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
+        <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            {label}
+          </span>
+          {selected.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              className="rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              クリア
+            </button>
+          )}
+        </div>
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -142,13 +175,8 @@ export default function MultiSelectFilter({
                     >
                       {active && <Check className="h-3 w-3" />}
                     </span>
-                    {o.image && (
-                      <img
-                        src={o.image}
-                        alt=""
-                        loading="lazy"
-                        className="h-5 w-5 shrink-0 rounded-full object-cover"
-                      />
+                    {o.image !== undefined && (
+                      <Avatar src={o.image} className="h-5 w-5" />
                     )}
                     <span className="flex-1 truncate">{o.label}</span>
                     {o.count != null && (

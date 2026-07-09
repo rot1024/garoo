@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Moon, Sun, Monitor, LogOut, ImageOff } from "lucide-react";
+import { Loader2, Moon, Sun, Monitor, Globe, ImageOff } from "lucide-react";
 import { AuthContext } from "@/App";
 import {
   getFacets,
@@ -20,6 +20,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Masonry from "@/components/Masonry";
 import PictureCard from "@/components/PictureCard";
 import FilterBar, { type Filters } from "@/components/FilterBar";
+import MultiSelectFilter from "@/components/MultiSelectFilter";
+import { providerLabel } from "@/lib/format";
 
 const PAGE_SIZE = 40;
 
@@ -168,6 +170,12 @@ export default function Gallery() {
   // Ordered id list handed to each card so the detail modal can page prev/next.
   const navList = items.map((p) => ({ provider: p.provider, id: p.id }));
 
+  const providerOptions = (facets?.providers ?? []).map((p) => ({
+    value: p.provider,
+    label: providerLabel(p.provider),
+    count: p.n,
+  }));
+
   return (
     <div className="min-h-screen">
       {/* Sticky header. One row on wide screens (title | filters | actions);
@@ -184,8 +192,17 @@ export default function Gallery() {
             </span>
           </div>
 
-          {/* Actions: on the first row's right below lg; trailing on lg */}
+          {/* Actions: on the first row's right below lg; trailing on lg.
+              Provider is a rarely-used filter, so it lives here as an icon. */}
           <div className="ml-auto flex shrink-0 items-center gap-1 lg:order-3 lg:ml-0">
+            <MultiSelectFilter
+              iconOnly
+              label="プロバイダ"
+              icon={<Globe className="h-4 w-4" />}
+              options={providerOptions}
+              selected={filters.providers}
+              onChange={(providers) => patchFilters({ providers })}
+            />
             <Button
               variant="ghost"
               size="icon"
@@ -200,14 +217,6 @@ export default function Gallery() {
               ) : (
                 <Monitor className="h-4 w-4" />
               )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={auth.signOut}
-              aria-label="サインアウト"
-            >
-              <LogOut className="h-4 w-4" />
             </Button>
           </div>
 

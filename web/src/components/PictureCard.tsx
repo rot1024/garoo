@@ -4,6 +4,7 @@ import { Play, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mediaUrl, type Picture } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 
 // A single masonry tile: the post's first media, with a hover overlay showing
 // author + category. Videos render a muted <video> (first frame as poster) with
@@ -79,14 +80,7 @@ export default function PictureCard({
       {/* Hover overlay */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
         <div className="flex items-center gap-2">
-          {picture.avatar && (
-            <img
-              src={picture.avatar}
-              alt=""
-              className="h-6 w-6 rounded-full object-cover"
-              loading="lazy"
-            />
-          )}
+          <Avatar src={picture.avatar} className="h-6 w-6" />
           <span className="truncate text-sm font-medium text-white">
             @{picture.screenName}
           </span>

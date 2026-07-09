@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Play, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mediaUrl, type Picture } from "@/lib/api";
@@ -84,8 +85,13 @@ export default function PictureCard({
       className="group relative block overflow-hidden rounded-xl border bg-muted/40 shadow-sm ring-0 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Aspect-ratio box reserves the tile's height so nothing jumps: it shows
-          a pulsing skeleton until the media loads, then fades the media in. */}
-      <div
+          a pulsing skeleton until the media loads, then fades the media in. It's
+          a layout-motion box so that when the real ratio arrives and the height
+          changes, the tiles below slide smoothly into place instead of snapping
+          (layout="position" keeps the box's own resize instant = no image warp,
+          but still triggers framer's projection so siblings animate). */}
+      <motion.div
+        layout="position"
         className={cn(
           "relative w-full overflow-hidden bg-muted",
           !loaded && "animate-pulse"
@@ -121,7 +127,7 @@ export default function PictureCard({
             )}
           />
         )}
-      </div>
+      </motion.div>
 
       {/* Top-right badges: video play / multi-count */}
       <div className="pointer-events-none absolute right-2 top-2 flex gap-1">

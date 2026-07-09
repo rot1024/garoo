@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import type { ReactNode } from "react";
 
 // Responsive column count, matching the Tailwind breakpoints we used before
@@ -44,6 +44,7 @@ export default function Masonry<T>({
   items.forEach((item, i) => columns[i % cols].push(item));
 
   return (
+    <LayoutGroup>
     <div className="flex items-start gap-3">
       {columns.map((col, ci) => (
         <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
@@ -59,6 +60,9 @@ export default function Masonry<T>({
                   duration: 0.32,
                   ease: [0.22, 0.61, 0.36, 1],
                   delay: Math.min(i, 14) * 0.012,
+                  // Position (layout) shifts — e.g. a tile below one that just
+                  // grew after its image loaded — slide with no per-index delay.
+                  layout: { duration: 0.3, ease: [0.22, 0.61, 0.36, 1] },
                 }}
               >
                 {children(item)}
@@ -68,5 +72,6 @@ export default function Masonry<T>({
         </div>
       ))}
     </div>
+    </LayoutGroup>
   );
 }

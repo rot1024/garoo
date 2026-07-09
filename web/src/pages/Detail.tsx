@@ -25,6 +25,7 @@ import {
   Plus,
   Save,
   SquareArrowOutUpRight,
+  ImageOff,
 } from "lucide-react";
 import { AuthContext } from "@/App";
 import {
@@ -305,6 +306,9 @@ function Body({
   onDirtyChange: (dirty: boolean) => void;
   onUnauthorized: () => void;
 }) {
+  // Media keys that failed to load (e.g. a legacy post whose guessed .jpg 404s).
+  const [erroredKeys, setErroredKeys] = useState<Set<string>>(() => new Set());
+
   // Only show the spinner on the very first load; while paging we keep the
   // previous post visible so the slide transition isn't broken by a spinner.
   if (loading && !picture) {
@@ -327,6 +331,9 @@ function Body({
 
   const media = picture.media;
   const current = media[active];
+  const failed = current ? erroredKeys.has(current.key) : false;
+  const markFailed = (key: string) =>
+    setErroredKeys((prev) => new Set(prev).add(key));
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
@@ -343,37 +350,51 @@ function Body({
           Paging between posts slides the media in the travel direction. */}
       <div className="relative flex h-[50vh] w-full shrink-0 items-center justify-center overflow-hidden bg-white dark:bg-black lg:h-full lg:w-auto lg:flex-1">
         <AnimatePresence mode="wait" custom={direction} initial={false}>
-          {current ? (
-            current.type === "video" ? (
-              <motion.video
-                key={current.key}
-                custom={direction}
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.1, ease: "easeInOut" }}
-                src={mediaUrl(current.key)}
-                controls
-                playsInline
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <motion.img
-                key={current.key}
-                custom={direction}
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.1, ease: "easeInOut" }}
-                src={mediaUrl(current.key)}
-                alt={picture.description || picture.screenName}
-                className="max-h-full max-w-full object-contain"
-              />
-            )
-          ) : (
+          {!current ? (
             <div className="p-24 text-sm text-muted-foreground">no media</div>
+          ) : failed ? (
+            <motion.div
+              key={current.key + ":err"}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.1, ease: "easeInOut" }}
+              className="flex flex-col items-center justify-center gap-2 p-10 text-muted-foreground"
+            >
+              <ImageOff className="h-10 w-10" />
+              <span className="text-sm">画像を読み込めませんでした</span>
+            </motion.div>
+          ) : current.type === "video" ? (
+            <motion.video
+              key={current.key}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.1, ease: "easeInOut" }}
+              src={mediaUrl(current.key)}
+              controls
+              playsInline
+              onError={() => markFailed(current.key)}
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <motion.img
+              key={current.key}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.1, ease: "easeInOut" }}
+              src={mediaUrl(current.key)}
+              alt={picture.description || picture.screenName}
+              onError={() => markFailed(current.key)}
+              className="max-h-full max-w-full object-contain"
+            />
           )}
         </AnimatePresence>
 

@@ -250,12 +250,14 @@ export async function handleList(url: URL, env: Env): Promise<Response> {
   if (mediaset === null) {
     where.push("(media_url IS NULL OR media_url != '')");
   } else {
-    const types = mediaset.split(",");
+    const types = mediaset.split(",").filter(Boolean);
     const conds: string[] = [];
     if (types.includes("image")) conds.push(HAS_IMAGE);
     if (types.includes("video")) conds.push("media_url LIKE '%.mp4%'");
     if (types.includes("none")) conds.push("media_url = ''");
-    where.push(conds.length ? `(${conds.join(" OR ")})` : "1=0");
+    // Empty selection = no media restriction (show all), like the other filters
+    // — not "match nothing".
+    if (conds.length) where.push(`(${conds.join(" OR ")})`);
   }
 
   const q = url.searchParams.get("q");

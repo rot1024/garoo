@@ -1,6 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
+  // Only apply hover: / group-hover: on devices that actually hover. On touch
+  // this stops the "first tap reveals the hover overlay, second tap navigates"
+  // double-tap — a single tap opens the card modal.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     container: {

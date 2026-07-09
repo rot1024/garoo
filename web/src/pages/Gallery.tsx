@@ -186,22 +186,17 @@ export default function Gallery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterKey]);
 
-  // Infinite scroll sentinel.
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && cursor && !loadingMore && !loading) {
-          load(false, cursor);
-        }
-      },
-      { rootMargin: "800px" }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [cursor, loadingMore, loading, load]);
+  // Load the next page (fired by the masonry's per-column sentinels). A ref
+  // guards against the observer firing several times before loadingMore flips,
+  // which would append the same page twice.
+  const loadingMoreRef = useRef(false);
+  const onLoadMore = useCallback(() => {
+    if (!cursor || loadingMoreRef.current || loading) return;
+    loadingMoreRef.current = true;
+    load(false, cursor).finally(() => {
+      loadingMoreRef.current = false;
+    });
+  }, [cursor, loading, load]);
 
   // Ordered id list handed to each card so the detail modal can page prev/next.
   const navList = items.map((p) => ({ provider: p.provider, id: p.id }));
@@ -287,13 +282,16 @@ export default function Gallery() {
             <p className="text-sm">条件に合う投稿がありません</p>
           </div>
         ) : (
-          <Masonry items={items} getKey={(p) => `${p.provider}:${p.id}`}>
+          <Masonry
+            items={items}
+            getKey={(p) => `${p.provider}:${p.id}`}
+            onLoadMore={onLoadMore}
+          >
             {(p) => <PictureCard picture={p} navList={navList} />}
           </Masonry>
         )}
 
-        {/* Infinite-scroll trigger + spinner */}
-        <div ref={sentinel} className="h-10" />
+        {/* Next-page spinner (paging fires from the masonry's column sentinels). */}
         {loadingMore && (
           <div className="flex justify-center py-6">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

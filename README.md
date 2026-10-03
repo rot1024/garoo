@@ -11,7 +11,7 @@ Runs on [Cloudflare Workers](https://workers.cloudflare.com/). The code lives in
 ## Architecture
 
 - **Receiver**: Discord
-  - A cron trigger polls the channel every minute (a KV single-flight lock prevents overlapping runs)
+  - A cron trigger polls the channel every minute (a single-flight lock in D1 prevents overlapping runs)
   - `POST /webhook` accepts `{ "content": "<url> <category> <tags...>" }` for manual/other integrations
 - **Provider**: Twitter / X (via [twitterapi.io](https://twitterapi.io/) — fetches text, author, photos, and the highest-bitrate mp4 for videos)
 - **Stores** (a post is saved to every configured store):
@@ -135,8 +135,9 @@ cd web && npm install && npm run dev
 ```
 
 Set `GALLERY_KEY` (and `DROPBOX_BASE_DIR`) in `workers/.dev.vars` for local runs.
-`npm run deploy` in `workers/` builds `web/` first (via `predeploy`) so the
-Static Assets are up to date.
+Pushes to `main` are deployed by the Cloudflare Git integration (see
+[Deployment](#deployment)). For a manual deploy, `npm run deploy` in `workers/`
+builds `web/` first (via `predeploy`) so the Static Assets are up to date.
 
 ## Commands (post in Discord)
 
@@ -169,8 +170,21 @@ npx wrangler secret put NOTION_SECONDARY_POST_DB
 npx wrangler secret put NOTION_AUTHOR_DB
 npx wrangler secret put GALLERY_KEY                # gates the private gallery (/api/*)
 
-npx wrangler deploy                                # builds web/ first via predeploy
+npm run deploy                                     # builds web/ first via predeploy
 ```
+
+After the first setup, pushes to `main` are built and deployed by the Cloudflare
+Git integration (Workers Builds). Settings of the `garoo` Worker
+(**Settings > Build**):
+
+| Setting | Value |
+|---------|-------|
+| Root directory | `workers` |
+| Build command | `npm --prefix ../web ci && npm --prefix ../web run build` |
+| Deploy command | `npx wrangler deploy` |
+| Build variable | `NODE_VERSION=20` |
+
+The deploy command doesn't run `predeploy`, so the build command builds `web/`.
 
 The Dropbox token (refresh token) is stored in KV under `dropbox_token`; seed it with `garoo login dropbox`. The Dropbox app needs the `files.content.write` and `files.content.read` scopes.
 

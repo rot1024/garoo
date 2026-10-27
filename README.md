@@ -6,7 +6,7 @@ Tools to automatically save social networking posts by simply posting the URL of
 2. Automatically fetches the post from the SNS
 3. Automatically saves the post and its media to databases and files
 
-Runs on [Cloudflare Workers](https://workers.cloudflare.com/). The code lives in [`workers/`](workers/).
+Runs on [Cloudflare Workers](https://workers.cloudflare.com/). The Worker lives in [`src/`](src/) (config in [`wrangler.toml`](wrangler.toml)) and the gallery in [`web/`](web/).
 
 ## Architecture
 
@@ -77,7 +77,7 @@ path, with `/api/*` handled by the Worker (`run_worker_first` in
 - **Media** is streamed from the private R2 bucket through `/api/media/...`
   (auth-gated, with Range support). R2 keys aren't stored in D1 — they're
   reconstructed from each row using the shared layout in
-  [`stores/r2key.ts`](workers/src/stores/r2key.ts), the same code the R2 store
+  [`stores/r2key.ts`](src/stores/r2key.ts), the same code the R2 store
   writes with. Editing a category also moves the post's R2 objects and updates
   the failure-fallback placeholder shown for any media that 404s.
 
@@ -129,15 +129,16 @@ them from R2 so they display with the correct extension/count.
 
 ```sh
 # terminal 1 — Worker + API + local D1/R2 on :8787
-cd workers && npx wrangler dev
+npx wrangler dev
 # terminal 2 — Vite dev server on :5173, proxying /api to :8787
 cd web && npm install && npm run dev
 ```
 
-Set `GALLERY_KEY` (and `DROPBOX_BASE_DIR`) in `workers/.dev.vars` for local runs.
+Set `GALLERY_KEY` (and `DROPBOX_BASE_DIR`) in `.dev.vars` for local runs.
 Pushes to `main` are deployed by the Cloudflare Git integration (see
-[Deployment](#deployment)). For a manual deploy, `npm run deploy` in `workers/`
-builds `web/` first (via `predeploy`) so the Static Assets are up to date.
+[Deployment](#deployment)). For a manual deploy, run `npm run deploy` (or `npx wrangler deploy`); the
+`[build]` command in `wrangler.toml` builds `web/` first so the Static Assets are
+up to date.
 
 ## Commands (post in Discord)
 
@@ -148,7 +149,6 @@ builds `web/` first (via `predeploy`) so the Static Assets are up to date.
 ## Deployment
 
 ```sh
-cd workers
 npm install
 npm run typecheck
 
@@ -170,7 +170,7 @@ npx wrangler secret put NOTION_SECONDARY_POST_DB
 npx wrangler secret put NOTION_AUTHOR_DB
 npx wrangler secret put GALLERY_KEY                # gates the private gallery (/api/*)
 
-npm run deploy                                     # builds web/ first via predeploy
+npm run deploy                                     # builds web/ first via [build]
 ```
 
 After the first setup, pushes to `main` are built and deployed by the Cloudflare
@@ -179,12 +179,13 @@ Git integration (Workers Builds). Settings of the `garoo` Worker
 
 | Setting | Value |
 |---------|-------|
-| Root directory | `workers` |
-| Build command | `npm --prefix ../web ci && npm --prefix ../web run build` |
+| Root directory | `/` (the default) |
+| Build command | *(empty)* |
 | Deploy command | `npx wrangler deploy` |
 | Build variable | `NODE_VERSION=20` |
 
-The deploy command doesn't run `predeploy`, so the build command builds `web/`.
+The defaults work: `wrangler deploy` runs the `[build]` command in
+`wrangler.toml`, which builds `web/`.
 
 The Dropbox token (refresh token) is stored in KV under `dropbox_token`; seed it with `garoo login dropbox`. The Dropbox app needs the `files.content.write` and `files.content.read` scopes.
 

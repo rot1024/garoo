@@ -6,8 +6,6 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build:web": "npm --prefix ../web run build",
-    "predeploy": "npm run build:web",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types"

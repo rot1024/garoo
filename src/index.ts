@@ -438,6 +438,10 @@ async function processSeeds(
 
     const result = await processOneSeed(seed, env, stores);
     results.push(result);
+    // Also record failures in Workers Logs; otherwise they only reach Discord.
+    if (result.error) {
+      console.error(`seed ${index}/${total} failed (${seed.url}): ${result.error}`);
+    }
 
     // Resolve the progress message to its outcome (⬇️ → ✅ / ❌ / ⏭️).
     const emoji = result.error ? "❌" : result.skipped ? "⏭️" : "✅";

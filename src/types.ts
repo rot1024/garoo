@@ -45,10 +45,11 @@ export interface Env {
   // other paths fall through to these assets with SPA fallback.
   ASSETS?: Fetcher;
 
-  // Shared secret gating the private gallery (/api/*, /gallery). The single user
-  // enters this key once; the Worker exchanges it for an HttpOnly session cookie.
-  // Unrelated to DEBUG — the gallery is a production surface, not a debug action.
-  GALLERY_KEY?: string;
+  // Cloudflare Access (Zero Trust) in front of the gallery. The Worker verifies
+  // the Access JWT on /api/* against these (see gallery/auth.ts). Unrelated to
+  // DEBUG — the gallery is a production surface, not a debug action.
+  ACCESS_TEAM_DOMAIN?: string; // e.g. "myteam.cloudflareaccess.com"
+  ACCESS_AUD?: string; // the Access application's AUD tag
   TWITTERAPI_IO_KEY?: string;
   // Kept for the archived browser-based provider (providers/x_browser.ts),
   // which may be revived later. Not used by the active twitterapi.io provider.

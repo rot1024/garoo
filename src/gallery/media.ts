@@ -3,7 +3,7 @@ import { json } from "./auth";
 import { contentType } from "../stores/r2key";
 
 // GET /api/media/<key> — stream a private R2 object to an authenticated user.
-// The caller (router) has already checked the session cookie. Supports HTTP
+// The caller (router) has already checked the Access JWT. Supports HTTP
 // Range so <video> can seek, and marks responses immutable (media is keyed by
 // post id and never rewritten in place) so the browser caches them.
 

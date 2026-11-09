@@ -36,8 +36,9 @@ watch_dir = "web/src"
 # Static Assets: serves the built gallery SPA (web/ → web/dist).
 # run_worker_first routes API + the DEBUG maintenance endpoints to the Worker
 # first; every other path falls through to the assets, with SPA fallback so
-# client routes like /p/<provider>/<id> return index.html. The gallery's own
-# auth (GALLERY_KEY session cookie) gates /api/*, independent of DEBUG.
+# client routes like /p/<provider>/<id> return index.html. Cloudflare Access sits
+# in front of the hostname; the Worker also verifies the Access JWT on /api/*
+# (ACCESS_TEAM_DOMAIN / ACCESS_AUD), independent of DEBUG.
 [assets]
 directory = "web/dist"
 binding = "ASSETS"

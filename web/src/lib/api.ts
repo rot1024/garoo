@@ -1,5 +1,5 @@
 // Typed client for the gallery Worker API. All requests are same-origin, so the
-// HttpOnly session cookie is sent automatically (including by <img>/<video>).
+// Cloudflare Access cookie is sent automatically (including by <img>/<video>).
 
 export interface MediaRef {
   key: string;
@@ -58,7 +58,7 @@ export interface ListResult {
   nextCursor: string | null;
 }
 
-/** Thrown on a 401 so the app can drop back to the login screen. */
+/** Thrown on a 401 so the app can ask the user to reload (re-auth via Access). */
 export class UnauthorizedError extends Error {
   constructor() {
     super("unauthorized");
@@ -98,16 +98,6 @@ export async function getSession(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export async function login(key: string): Promise<boolean> {
-  const res = await fetch("/api/session", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ key }),
-  });
-  return res.ok;
 }
 
 export function listPictures(params: ListParams): Promise<ListResult> {

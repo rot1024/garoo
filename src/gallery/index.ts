@@ -8,8 +8,8 @@ import { handleBackfillMedia } from "./backfill";
 // in wrangler.toml routes to the Worker before static assets). Returns null for
 // non-/api paths so the caller can fall through to the SPA / debug endpoints.
 //
-// /api/health and /api/session are public; everything else requires the session
-// cookie (see auth.ts). This is a separate surface from the DEBUG-gated
+// /api/health and /api/session are public; everything else requires a valid
+// Cloudflare Access JWT (see auth.ts). This is a separate surface from the DEBUG-gated
 // maintenance endpoints — the gallery must work in production with DEBUG off.
 export async function handleGallery(
   request: Request,
@@ -26,7 +26,7 @@ export async function handleGallery(
     return handleSession(request, env);
   }
 
-  // All data/media endpoints below require a valid session cookie.
+  // All data/media endpoints below require a valid Access JWT.
   const denied = await requireAuth(request, env);
   if (denied) return denied;
 

@@ -1,31 +1,32 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import { Routes, Route, useLocation, type Location } from "react-router-dom";
-import { ensureSession, clearKey } from "@/lib/auth";
-import Login from "@/components/Login";
+import { getSession } from "@/lib/api";
 import Gallery from "@/pages/Gallery";
 import Detail from "@/pages/Detail";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface AuthContextValue {
-  /** Drop the session (e.g. on a 401 mid-browse) and return to the login screen. */
+  /** The Access session was rejected mid-browse (e.g. expired) — ask to reload. */
   onUnauthorized: () => void;
-  /** Explicit sign-out: forget the stored key and show login. */
-  signOut: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
   onUnauthorized: () => {},
-  signOut: () => {},
 });
 
 type Status = "checking" | "authed" | "anon";
 
+// Login is handled entirely by Cloudflare Access in front of the Worker: by the
+// time this SPA loads, the user has already authenticated. "anon" only happens
+// when the Access session expired (or Access is misconfigured); reloading the
+// page sends the user back through the Access login.
 export default function App() {
   const [status, setStatus] = useState<Status>("checking");
 
   useEffect(() => {
     let alive = true;
-    ensureSession().then((ok) => {
+    getSession().then((ok) => {
       if (alive) setStatus(ok ? "authed" : "anon");
     });
     return () => {
@@ -34,10 +35,6 @@ export default function App() {
   }, []);
 
   const onUnauthorized = useCallback(() => setStatus("anon"), []);
-  const signOut = useCallback(() => {
-    clearKey();
-    setStatus("anon");
-  }, []);
 
   if (status === "checking") {
     return (
@@ -48,11 +45,28 @@ export default function App() {
   }
 
   if (status === "anon") {
-    return <Login onSuccess={() => setStatus("authed")} />;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm space-y-5 rounded-2xl border bg-card p-8 text-center shadow-xl">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+            <ShieldAlert className="h-5 w-5 text-primary" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-xl font-semibold tracking-tight">garoo gallery</h1>
+            <p className="text-sm text-muted-foreground">
+              認証の有効期限が切れました。再読み込みしてログインしてください
+            </p>
+          </div>
+          <Button className="w-full" onClick={() => window.location.reload()}>
+            再読み込み
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <AuthContext.Provider value={{ onUnauthorized, signOut }}>
+    <AuthContext.Provider value={{ onUnauthorized }}>
       <AppRoutes />
     </AuthContext.Provider>
   );

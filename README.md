@@ -75,7 +75,7 @@ path, with `/api/*` handled by the Worker (`run_worker_first` in
   original, registration date/order, and inline **category/tag editing** (with an
   unsaved-changes confirm). ←/→ or the edge arrows page between posts.
 - **Media** is streamed from the private R2 bucket through `/api/media/...`
-  (auth-gated, with Range support). R2 keys aren't stored in D1 — they're
+  (Access-gated, with Range support). R2 keys aren't stored in D1 — they're
   reconstructed from each row using the shared layout in
   [`stores/r2key.ts`](src/stores/r2key.ts), the same code the R2 store
   writes with. Editing a category also moves the post's R2 objects and updates
@@ -90,19 +90,43 @@ resolving them). Dropbox and Notion are brought in line with the existing
 
 ### Auth
 
-The gallery has its own auth, **independent of `DEBUG`** (it's a production
-surface, not a maintenance action). A single shared secret, `GALLERY_KEY`, gates
-`/api/*`: the user enters it once, the Worker validates it and issues an
-HttpOnly, HMAC-derived session cookie (so `<img>`/`<video>` requests authenticate
-too). The key is remembered in `localStorage` (obfuscated) for convenience. This
-is intentionally minimal — one trusted user, no roles.
+The gallery is protected by **Cloudflare Access (Zero Trust)**, independent of
+`DEBUG` (it's a production surface, not a maintenance action). There is no
+password in the app: Access handles login (e.g. a one-time PIN mailed to the
+owner, or Google) in front of the Worker's hostname, and the SPA just loads.
+
+Defence in depth: the Worker also verifies the Access JWT (`Cf-Access-Jwt-Assertion`
+header / `CF_Authorization` cookie — RS256 against the team's certs, plus issuer,
+audience and expiry) on every gated `/api/*` request, so a hostname that isn't
+behind Access (e.g. a preview URL) still can't read the data. Requests to
+`localhost` (`wrangler dev`) skip the check. If the Access session expires
+mid-browse, the gallery asks you to reload, which goes back through Access.
+
+Setup:
+
+1. Zero Trust dashboard → **Access → Applications → Add → Self-hosted**, with the
+   gallery hostname (e.g. `garoo.<subdomain>.workers.dev`) as the domain, and an
+   **Allow** policy for your e-mail. (Or Workers → `garoo` → Settings → Domains &
+   Routes → `workers.dev` → enable **Cloudflare Access**, then edit the
+   generated application's policy.) Also cover/disable **Preview URLs**.
+2. Copy the application's **Application Audience (AUD) Tag**.
+3. Set the Worker secrets:
+
+   ```sh
+   npx wrangler secret put ACCESS_TEAM_DOMAIN   # e.g. myteam.cloudflareaccess.com
+   npx wrangler secret put ACCESS_AUD           # the AUD tag from step 2
+   ```
+
+Note that Access covers the whole hostname, so the DEBUG-gated endpoints
+(`/webhook`, `/rescan`, ...) also need an Access login (or a service token).
+The cron-driven Discord polling is unaffected.
 
 ### API
 
-All under `/api/*`, cookie-gated except `/api/health` and `/api/session`.
+All under `/api/*`, Access-gated except `/api/health` and `/api/session`.
 
 - `GET /api/health` — health check
-- `GET|POST /api/session` — check / establish the session (POST `{ "key": "..." }`)
+- `GET /api/session` — whether the request carries a valid Access JWT
 - `GET /api/pictures` — list posts (keyset pagination). Params: `sort`
   (`newest|oldest|added_desc|added_asc|random`), `seed` (for `random`),
   `category` (repeatable; empty = uncategorized), `tag` (repeatable), `provider`
@@ -134,7 +158,8 @@ npx wrangler dev
 cd web && npm install && npm run dev
 ```
 
-Set `GALLERY_KEY` (and `DROPBOX_BASE_DIR`) in `.dev.vars` for local runs.
+Set `DROPBOX_BASE_DIR` in `.dev.vars` for local runs (the gallery needs no
+auth on `localhost`).
 Pushes to `main` are deployed by the Cloudflare Git integration (see
 [Deployment](#deployment)). For a manual deploy, run `npm run deploy` (or `npx wrangler deploy`); the
 `[build]` command in `wrangler.toml` builds `web/` first so the Static Assets are
@@ -168,7 +193,8 @@ npx wrangler secret put NOTION_TOKEN
 npx wrangler secret put NOTION_POST_DB
 npx wrangler secret put NOTION_SECONDARY_POST_DB
 npx wrangler secret put NOTION_AUTHOR_DB
-npx wrangler secret put GALLERY_KEY                # gates the private gallery (/api/*)
+npx wrangler secret put ACCESS_TEAM_DOMAIN         # Cloudflare Access gating the gallery
+npx wrangler secret put ACCESS_AUD                 # (see Auth)
 
 npm run deploy                                     # builds web/ first via [build]
 ```
